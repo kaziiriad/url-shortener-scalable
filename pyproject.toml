@@ -1,0 +1,21 @@
+[project]
+name = "url-shortener-scalable"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "asyncpg>=0.30.0",
+    "celery>=5.5.3",
+    "click>=8.2.1",
+    "email-validator>=2.3.0",
+    "fastapi[standard]>=0.116.1",
+    "flower>=2.0.1",
+    "motor>=3.7.1",
+    "psycopg2-binary>=2.9.10",
+    "pydantic-settings>=2.10.1",
+    "pymongo>=4.15.0",
+    "python-dotenv>=1.1.1",
+    "redis>=6.4.0",
+    "sqlalchemy[asyncio]>=2.0.43",
+]

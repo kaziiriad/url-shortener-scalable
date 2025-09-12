@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  web_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - BASE_URL=http://0.0.0.0:8000
+      - MONGO_URI=mongodb://mongo_db:27017
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - DB_NAME=url_shortener
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=pgpassword
+    networks:
+      - url_shortener_network
+    depends_on:
+      - redis
+      - mongo_db
+      - postgres
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - url_shortener_network
+
+  mongo_db:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - url_shortener_network
+
+
+  postgres:
+    image: postgres:latest
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=pgpassword
+      - POSTGRES_DB=url_shortener
+    networks:
+      - url_shortener_network
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uv run celery -A app.core.celery_app worker --loglevel=info --hostname=worker1 --queues=db_tasks,cleanup_tasks,celery
+    volumes:
+      - .:/app
+    environment:
+      - MONGO_URI=mongodb://mongo_db:27017
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - DB_NAME=url_shortener
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=pgpassword
+      - KEY_POPULATION_COUNT=50
+    networks:
+      - url_shortener_network
+    depends_on:
+      - redis
+      - postgres
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uv run celery -A app.core.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    volumes:
+      - .:/app
+      - celery_beat_data:/tmp
+    environment:
+      - MONGO_URI=mongodb://mongo_db:27017
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - DB_NAME=url_shortener
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=pgpassword
+      - KEY_POPULATION_COUNT=50
+      - KEY_POPULATION_SCHEDULE=300
+    networks:
+      - url_shortener_network
+    depends_on:
+      - redis
+      - postgres
+  
+  celery_flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5555:5555"
+    command: uv run celery -A app.core.celery_app flower --port=5555 --loglevel=info --broker=redis://redis:6379/1 --auto_refresh=True --enable_events=True
+    volumes:
+      - .:/app
+    environment:
+      - MONGO_URI=mongodb://mongo_db:27017
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+    networks:
+      - url_shortener_network
+    depends_on:
+      - redis
+  
+networks:
+  url_shortener_network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  redis_data:
+  postgres_data:
+  celery_beat_data:
