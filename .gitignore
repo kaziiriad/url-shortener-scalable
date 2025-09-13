@@ -232,3 +232,22 @@ __marimo__/
 .env.production
 
 GEMINI.md
+*.pem
+*.pub
+*.key
+*.crt
+*.csr
+*.pem.pub
+*.pem.key
+*.pem.crt
+*.pem.csr
+*.pem.pub
+*.pem.key
+*.pem.crt
+*.pem.csr
+*.pem.pub
+*.pem.key
+*.pem.crt
+*.pem.csr
+
+LOAD_BALANCER.md

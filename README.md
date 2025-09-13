@@ -11,8 +11,12 @@ A high-performance, scalable URL shortener service built with FastAPI, featuring
 - **Monitoring**: Celery Flower dashboard for task monitoring.
 - **Containerized**: Full Docker setup with docker-compose.
 - **Scalable Architecture**: Microservice design ready for horizontal scaling.
+- **Load Balancing and Rate Limiting**: Nginx load balancer with rate limiting and caching.
+- **AWS Infrastructure as Code**: AWS infrastructure managed with Pulumi.
 
 ## 🏗️ Architecture
+
+### Docker Compose Architecture
 
 ```mermaid
 graph TD
@@ -41,65 +45,187 @@ graph TD
     G --> E
 ```
 
+### AWS Architecture
+
+```mermaid
+graph TD
+    subgraph "Internet"
+        L[Users]
+        M[Admins]
+    end
+
+    subgraph "AWS Cloud"
+        subgraph "Public Subnet"
+            A[Application Load Balancer]
+            B[Bastion Host]
+        end
+
+        subgraph "Private Subnet"
+            subgraph "Compute"
+                C[Web Applications<br/>3 instances]
+                subgraph "Background Processing"
+                    K[Celery Flower]
+                    I[Celery Worker]
+                    J[Celery Beat]
+                end
+            end
+            
+            subgraph "Storage"
+                D[Cache Layer<br/>Redis]
+                E[Relational DB<br/>PostgreSQL]  
+                F[Document DB<br/>MongoDB]
+            end
+        end
+    end
+
+    %% Traffic flows
+    L -->|HTTPS| A
+    A -->|Load Balanced Traffic| C
+    C -->|Data Access| D
+    C -->|Data Access| E
+    C -->|Data Access| F
+    I -->|Task Processing| D
+    I -->|Task Processing| E
+    I -->|Task Processing| F
+
+    %% Admin access (dotted lines)
+    M -.->|SSH| B
+    B -.->|SSH Tunnel| C
+    B -.->|SSH Tunnel| I
+    B -.->|SSH Tunnel| D
+    B -.->|SSH Tunnel| E
+    B -.->|SSH Tunnel| F
+    B -.->|SSH Tunnel| K
+    B -.->|SSH Tunnel| J
+
+```
+
+## AWS Infrastructure
+
+This project includes a complete AWS infrastructure defined as code using Pulumi. The infrastructure is designed to be scalable, secure, and highly available.
+
+### Deploying the AWS Infrastructure
+
+To deploy the AWS infrastructure, you will need to have Pulumi installed and configured with your AWS credentials. Then, navigate to the `infra` directory and run the following commands:
+
+```bash
+cd infra
+pulumi up
+```
+
+This will provision all the necessary AWS resources, including:
+
+*   A VPC with public and private subnets
+*   A NAT gateway for outbound traffic from the private subnets
+*   An internet gateway for inbound traffic to the public subnets
+*   Security groups to control traffic between the different components
+*   EC2 instances for the application, load balancer, databases, and Celery services
+*   A bastion host for secure access to the private instances
+
+
+### Bastion Host and SSH Tunneling
+
+A bastion host is created in the public subnet to allow secure SSH access to the instances in the private subnet. You can connect to the private instances using SSH tunneling through the bastion host. The Pulumi output provides an example command for this:
+
+```bash
+ssh -i ../<key_name>.pem -o ProxyCommand="ssh -i ../<key_name>.pem -W %h:%p ubuntu@<bastion_public_ip>" ubuntu@<private_instance_ip>
+```
+
+### Celery Security Groups
+
+The security groups for the Celery services are configured to restrict traffic between them:
+
+*   **Celery Worker**: Allows ingress traffic from Celery Beat and Celery Flower, and egress traffic to the databases.
+*   **Celery Beat**: Allows ingress traffic for SSH from the bastion host, and egress traffic to the Celery Worker.
+*   **Celery Flower**: Allows ingress traffic from the load balancer on port 5555 and for SSH from the bastion host, and egress traffic to the Celery Worker.
+
+## Load Balancer and Rate Limiter
+
+This project includes a comprehensive Nginx load balancer and rate limiter configuration. The load balancer distributes traffic across three application instances, and the rate limiter helps prevent abuse and ensures high availability.
+
+### Running with the Load Balancer
+
+To run the application with the Nginx load balancer, use the `docker-compose-lb.yml` file:
+
+```bash
+docker-compose -f docker-compose-lb.yml up -d
+```
+
+This will start the Nginx load balancer, three instances of the application, and all the necessary backend services.
+
+### Rate Limiting
+
+The following rate limits are in place:
+
+| Endpoint | Rate Limit | Burst | Purpose |
+|---|---|---|---|
+| `/api/v1/create` | 10/min | 3 | Prevent abuse of URL creation |
+| `/api/*` | 60/min | 10 | General API protection |
+| `/[a-zA-Z0-9]{6,8}` | 100/sec | 20 | High-volume redirects |
+| `/health` | 10/sec | 5 | Health check monitoring |
+
+For more detailed information about the load balancer and rate limiter configuration, please see the `LOAD_BALANCER.md` file.
+
 ## 📋 Prerequisites
 
 - Docker and Docker Compose
 - Python 3.12+ (for local development)
 - Git
+- Pulumi
 
 ## 🚀 Quick Start
 
 ### Using Docker (Recommended)
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd url_shortener_scalable
-   ```
+1.  **Clone the repository**
+    ```bash
+    git clone <repository-url>
+    cd url_shortener_scalable
+    ```
 
-2. **Start all services**
-   ```bash
-   docker-compose up -d
-   ```
+2.  **Start all services**
+    ```bash
+    docker-compose up -d
+    ```
 
-3. **Verify services are running**
-   ```bash
-   docker-compose ps
-   ```
+3.  **Verify services are running**
+    ```bash
+    docker-compose ps
+    ```
 
-4. **Access the application**
-   - API: http://localhost:8000
-   - Flower Dashboard: http://localhost:5555
-   - API Documentation: http://localhost:8000/docs
+4.  **Access the application**
+    - API: http://localhost:8000
+    - Flower Dashboard: http://localhost:5555
+    - API Documentation: http://localhost:8000/docs
 
 ### Local Development
 
-1. **Create virtual environment**
-   ```bash
-   uv venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
+1.  **Create virtual environment**
+    ```bash
+    uv venv .venv
+    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+    ```
 
-2. **Install dependencies**
-   ```bash
-   uv sync
-   ```
+2.  **Install dependencies**
+    ```bash
+    uv sync
+    ```
 
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+3.  **Set up environment variables**
+    ```bash
+    cp .env.example .env
+    # Edit .env with your configuration
+    ```
 
-4. **Start external services**
-   ```bash
-   docker-compose up -d redis postgres mongo_db
-   ```
+4.  **Start external services**
+    ```bash
+    docker-compose up -d redis postgres mongo_db
+    ```
 
-5. **Run the application**
-   ```bash
-   uv run app.main:app --reload
-   ```
+5.  **Run the application**
+    ```bash
+    uv run app.main:app --reload
+    ```
 
 ## 🔧 Configuration
 
@@ -133,10 +259,10 @@ Key environment variables in `.env`:
 ```bash
 curl -X POST "http://localhost:8000/api/v1/create" \
   -H "Content-Type: application/json" \
-  -d '{
+  -d {
     "long_url": "https://www.example.com",
     "expires_at": "2025-12-31T23:59:59"
-  }'
+  }
 ```
 
 **Response:**
@@ -168,7 +294,7 @@ curl "http://localhost:8000/health"
 ## 🛠️ Services
 
 | Service | Port | Description |
-|---------|------|-------------|
+|---|---|---|
 | **web_app** | 8000 | Main FastAPI application |
 | **redis** | 6379 | Cache for fast URL lookups |
 | **postgres** | 5432 | Primary database for URL key management |
@@ -230,10 +356,10 @@ The system is designed to handle high loads through:
 
 ### Adding New Features
 
-1. **API Endpoints**: Add routes in `app/routes/`
-2. **Background Tasks**: Create tasks in `app/tasks/`
-3. **Database Models**: Update models in `app/db/sql/models.py`
-4. **Services**: Add business logic in `app/services/`
+1.  **API Endpoints**: Add routes in `app/routes/`
+2.  **Background Tasks**: Create tasks in `app/tasks/`
+3.  **Database Models**: Update models in `app/db/sql/models.py`
+4.  **Services**: Add business logic in `app/services/`
 
 ### Database Migrations
 
@@ -249,12 +375,12 @@ The application automatically initializes the PostgreSQL database on startup. Fo
 
 ### Production Considerations
 
-1. **Environment Variables**: Use secure values in production
-2. **SSL/TLS**: Configure HTTPS for production domains
-3. **Database**: Use managed database services
-4. **Caching**: Consider Redis Cluster for high availability
-5. **Monitoring**: Add application performance monitoring
-6. **Scaling**: Use container orchestration (Kubernetes, Docker Swarm)
+1.  **Environment Variables**: Use secure values in production
+2.  **SSL/TLS**: Configure HTTPS for production domains
+3.  **Database**: Use managed database services
+4.  **Caching**: Consider Redis Cluster for high availability
+5.  **Monitoring**: Add application performance monitoring
+6.  **Scaling**: Use container orchestration (Kubernetes, Docker Swarm)
 
 ### Docker Production
 

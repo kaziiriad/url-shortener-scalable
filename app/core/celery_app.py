@@ -41,6 +41,11 @@ celery_app.conf.beat_schedule = {
         'schedule': float(settings.key_population_schedule),
         'args': ()  # Uses default count from config
     },
+    'remove-expired-keys-periodic': {
+        'task': 'remove_expired_keys',
+        'schedule': float(settings.cleanup_expired_schedule),
+        'args': ()  # Uses default count from config
+    },
 }
 
 # Set default timezone
