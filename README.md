@@ -105,31 +105,26 @@ graph TD
 
 Key environment variables in `.env`:
 
-```env
-# Database
-DB_HOST=postgres
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=pgpassword
-DB_NAME=url_shortener
+| Variable | Description | Default Value |
+|---|---|---|
+| `MONGO_URI` | MongoDB connection string | `mongodb://localhost:27017` |
+| `REDIS_HOST` | Redis host | `localhost` |
+| `REDIS_PORT` | Redis port | `6379` |
+| `REDIS_PASSWORD` | Redis password | ` ` |
+| `DB_NAME` | PostgreSQL database name | `url_shortener` |
+| `DB_HOST` | PostgreSQL host | `localhost` |
+| `DB_PORT` | PostgreSQL port | `5432` |
+| `DB_USER` | PostgreSQL user | `postgres` |
+| `DB_PASSWORD` | PostgreSQL password | ` ` |
+| `HOST` | Application host | `localhost` |
+| `PORT` | Application port | `8000` |
+| `BASE_URL` | Base URL for short links | `http://localhost:8000` |
+| `KEY_POPULATION_COUNT` | Number of keys to pre-populate | `10` |
+| `KEY_POPULATION_SCHEDULE` | Schedule for key pre-population (in seconds) | `1800` |
+| `TASK_RETRY_DELAY` | Delay for retrying failed tasks (in seconds) | `60` |
+| `TASK_MAX_RETRIES` | Maximum number of retries for failed tasks | `3` |
+| `CLEANUP_EXPIRED_SCHEDULE` | Schedule for cleaning up expired links (in seconds) | `86400` |
 
-# Redis
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_PASSWORD=
-
-# MongoDB
-MONGO_URI=mongodb://mongo_db:27017
-
-# Application
-BASE_URL=http://localhost:8000
-HOST=0.0.0.0
-PORT=8000
-
-# Celery Tasks
-KEY_POPULATION_COUNT=50
-KEY_POPULATION_SCHEDULE=300
-```
 
 ## 📚 API Usage
 
