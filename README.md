@@ -1,31 +1,44 @@
 # URL Shortener - Scalable Microservice
 
-A high-performance, scalable URL shortener service built with FastAPI, featuring Redis caching, PostgreSQL storage, MongoDB for analytics, and Celery for background tasks.
+A high-performance, scalable URL shortener service built with FastAPI, featuring Redis caching, PostgreSQL for key management, and MongoDB for URL storage.
 
 ## 🚀 Features
 
-- **Fast URL Shortening**: Generate short URLs with pre-populated keys for instant response
-- **Redis Caching**: Lightning-fast redirects with Redis-first lookup
-- **Dual Database**: PostgreSQL for URL management, MongoDB for analytics
-- **Background Tasks**: Celery workers for key pre-population and cleanup
-- **Monitoring**: Celery Flower dashboard for task monitoring
-- **Containerized**: Full Docker setup with docker-compose
-- **Scalable Architecture**: Microservice design ready for horizontal scaling
+- **Fast URL Shortening**: Generate short URLs with pre-populated keys for instant response.
+- **Redis Caching**: Lightning-fast redirects with Redis-first lookup.
+- **Dual Database**: PostgreSQL for pre-populating and managing a pool of short URL keys, and MongoDB for storing the mapping between short and long URLs.
+- **Background Tasks**: Celery workers for key pre-population and cleanup.
+- **Monitoring**: Celery Flower dashboard for task monitoring.
+- **Containerized**: Full Docker setup with docker-compose.
+- **Scalable Architecture**: Microservice design ready for horizontal scaling.
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   FastAPI App   │────│   Redis Cache   │    │   PostgreSQL    │
-│   (Port 8000)   │    │   (Port 6379)   │    │   (Port 5432)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                                              │
-         ├──────────────────────────────────────────────┘
-         │
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│     MongoDB     │    │ Celery Worker   │    │ Celery Flower   │
-│   (Port 27017)  │    │  (Background)   │    │   (Port 5555)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+```mermaid
+graph TD
+    subgraph "User Facing"
+        A[FastAPI App <br> Port 8000]
+    end
+
+    subgraph "Data Stores"
+        B[Redis Cache <br> Port 6379]
+        C[PostgreSQL <br> Key Management <br> Port 5432]
+        D[MongoDB <br> URL Storage <br> Port 27017]
+    end
+
+    subgraph "Background Processing"
+        E[Celery Worker]
+        F[Celery Beat]
+        G[Celery Flower <br> Port 5555]
+    end
+
+    A --> B
+    A --> C
+    A --> D
+    E --> D
+    E --> C
+    F --> E
+    G --> E
 ```
 
 ## 📋 Prerequisites
@@ -85,7 +98,7 @@ A high-performance, scalable URL shortener service built with FastAPI, featuring
 
 5. **Run the application**
    ```bash
-   uvicorn app.main:app --reload
+   uv run app.main:app --reload
    ```
 
 ## 🔧 Configuration
@@ -163,8 +176,8 @@ curl "http://localhost:8000/health"
 |---------|------|-------------|
 | **web_app** | 8000 | Main FastAPI application |
 | **redis** | 6379 | Cache for fast URL lookups |
-| **postgres** | 5432 | Primary database for URL storage |
-| **mongo_db** | 27017 | Analytics and logging database |
+| **postgres** | 5432 | Primary database for URL key management |
+| **mongo_db** | 27017 | Database for URL storage and analytics |
 | **celery_worker** | - | Background task processor |
 | **celery_beat** | - | Periodic task scheduler |
 | **celery_flower** | 5555 | Task monitoring dashboard |
@@ -173,9 +186,8 @@ curl "http://localhost:8000/health"
 
 The system uses Celery for background processing:
 
-- **Key Pre-population**: Automatically generates unused short URL keys
-- **Cleanup Tasks**: Removes expired URLs and maintains database health
-- **Analytics**: Processes usage statistics and metrics
+- **Key Pre-population**: Automatically generates unused short URL keys in PostgreSQL.
+- **Cleanup Tasks**: Removes expired URLs and maintains database health.
 
 Monitor tasks at: http://localhost:5555
 
@@ -193,31 +205,23 @@ url_shortener_scalable/
 │   ├── services/          # Business logic services
 │   ├── tasks/             # Celery background tasks
 │   └── main.py            # FastAPI application entry point
+├── .dockerignore
+├── .env
+├── .gitignore
+├── .python-version
 ├── docker-compose.yml     # Multi-service Docker setup
-├── Dockerfile            # Container image definition
+├── Dockerfile
+├── Dockerfile.original
 ├── pyproject.toml        # Python dependencies and project config
-└── README.md             # This file
+├── README.md             # This file
+└── uv.lock
 ```
 
 ## 🧪 Testing
 
 ### Manual Testing
 
-1. **Create a short URL**
-   ```bash
-   curl -X POST "http://localhost:8000/api/v1/create" \
-     -H "Content-Type: application/json" \
-     -d '{"long_url": "https://github.com", "expires_at": "2025-12-31T23:59:59"}'
-   ```
-
-2. **Test the redirect**
-   ```bash
-   curl -I "http://localhost:8000/<short_key>"
-   ```
-
-3. **Check background tasks**
-   - Visit http://localhost:5555 to see Celery tasks
-   - Monitor logs: `docker-compose logs celery_worker`
+The `README.md` provides instructions for manual testing. However, there are no automated tests in the project. It is highly recommended to add a testing framework like `pytest` and write unit and integration tests to ensure the reliability of the application.
 
 ### Load Testing
 
@@ -238,10 +242,7 @@ The system is designed to handle high loads through:
 
 ### Database Migrations
 
-The application automatically initializes databases on startup. For schema changes:
-
-1. Update models in `app/db/sql/models.py`
-2. Restart the application to apply changes
+The application automatically initializes the PostgreSQL database on startup. For schema changes, it is recommended to use a database migration tool like `Alembic` to manage schema changes in a production environment. The current setup is suitable for development and testing only.
 
 ### Monitoring
 
