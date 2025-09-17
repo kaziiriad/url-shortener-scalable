@@ -187,6 +187,32 @@ The security groups for the Celery services are configured to restrict traffic b
 *   **Celery Beat**: Allows ingress traffic for SSH from the bastion host, and egress traffic to the Celery Worker.
 *   **Celery Flower**: Allows ingress traffic from the load balancer on port 5555 and for SSH from the bastion host, and egress traffic to the Celery Worker.
 
+### Ansible Deployment
+
+This project uses Ansible to automate the configuration and deployment of the application on the AWS infrastructure provisioned by Pulumi.
+
+**Prerequisites:**
+- Ansible installed on your local machine.
+
+**Deployment Steps:**
+
+1.  **Provision Infrastructure:** First, ensure the AWS infrastructure is up and running by using Pulumi as described in the "Deploying the AWS Infrastructure" section.
+
+2.  **Auto-generated Inventory:** The Pulumi script automatically generates the Ansible inventory file (`ansible/inventory/hosts.yml`) and group variables (`ansible/group_vars/all.yml`). You don't need to create or modify these files manually.
+
+3.  **Run the Playbook:** Navigate to the `ansible` directory and run the main playbook:
+
+    ```bash
+    cd ansible
+    ansible-playbook -i inventory/hosts.yml playbook.yml
+    ```
+
+    This command will:
+    - Install necessary software on all servers (Docker, Python, etc.).
+    - Configure all services (Nginx, PostgreSQL, Redis, MongoDB).
+    - Deploy the FastAPI application.
+    - Set up and start the Celery workers, beat, and Flower dashboard.
+
 ## Load Balancer and Rate Limiter
 
 This project includes a comprehensive Nginx load balancer and rate limiter configuration. The load balancer distributes traffic across three application instances, and the rate limiter helps prevent abuse and ensures high availability.
