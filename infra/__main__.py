@@ -1,11 +1,13 @@
 import pulumi
 import pulumi_aws as aws
 import os
-
+from ansible_config import create_ansible_inventory_and_group_vars, run_ansible_playbook, ansible_test_ssh_tunneling
 # variables
 instance_type = 't2.micro'
 ami = 'ami-01811d4912b4ccb26'  # Ubuntu 22.04 LTS in ap-southeast-1
-key_name = "url-shortener-key-pair"
+key_name = "url-shortener-keypair"
+playbook_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))+"/ansible/"
+project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Create a VPC
 vpc = aws.ec2.Vpc(
@@ -486,7 +488,47 @@ celery_bastion_rule = aws.ec2.SecurityGroupRule(
     description='SSH access from bastion to Celery services'
 )
 
-# Export public IPs (only for public instances)
+# --- Ansible Configuration Generation ---
+# # Create Ansible inventory file
+# create_inventory = create_ansible_inventory(
+#     bastion_instance=bastion_instance,
+#     lb_instance=lb_instance,
+#     app_server_instances=app_server_instances,
+#     redis_instance=redis_instance,
+#     postgres_instance=postgres_instance,
+#     mongo_instance=mongo_instance,
+#     celery_worker_instance=celery_worker_instance,
+#     celery_beat_instance=celery_beat_instance,
+#     celery_flower_instance=celery_flower_instance,
+#     key_name=key_name
+# )
+
+# Create Ansible group variables file
+create_group_vars = create_ansible_inventory_and_group_vars(
+    bastion_instance=bastion_instance,
+    lb_instance=lb_instance,
+    app_server_instances=app_server_instances,
+    redis_instance=redis_instance,
+    postgres_instance=postgres_instance,
+    mongo_instance=mongo_instance,
+    celery_worker_instance=celery_worker_instance,
+    celery_beat_instance=celery_beat_instance,
+    celery_flower_instance=celery_flower_instance,
+    private_subnet=private_subnet,
+    key_name=key_name,
+    playbook_dir=playbook_dir,
+    project_dir=project_dir
+)
+
+# ssh_tunneling = ansible_test_ssh_tunneling(create_group_vars, key_name)
+# run_ansible_playbook(create_group_vars, ssh_tunneling, key_name)
+
+# Note: Ansible inventory and group_vars are now automatically generated
+# by the create_inventory and create_group_vars functions above
+
+# Exports for Pulumi stack outputs
+pulumi.export('private_subnet_cidr', private_subnet.cidr_block)
+
 pulumi.export('bastion_public_ip', bastion_instance.public_ip)
 pulumi.export('lb_public_ip', lb_instance.public_ip)
 
@@ -502,12 +544,24 @@ pulumi.export('celery_worker_private_ip', celery_worker_instance.private_ip)
 pulumi.export('celery_beat_private_ip', celery_beat_instance.private_ip)
 pulumi.export('celery_flower_private_ip', celery_flower_instance.private_ip)
 
+
 # Export connection information
 pulumi.export('ssh_bastion_command', pulumi.Output.concat(
-    'ssh -i ../', key_name, '.pem ubuntu@', bastion_instance.public_ip
+    'ssh -i ~/.ssh/', key_name, '.id_rsa ubuntu@', bastion_instance.public_ip
 ))
-pulumi.export('ssh_via_bastion_example', pulumi.Output.concat(
-    'ssh -i ../', key_name, '.pem -o ProxyCommand="ssh -i ../', key_name, 
-    '.pem -W %h:%p ubuntu@', bastion_instance.public_ip, '" ubuntu@'
-))
+all_instances = [redis_instance, mongo_instance, postgres_instance, celery_worker_instance, celery_beat_instance] + app_server_instances
+all_instances = [redis_instance, mongo_instance, postgres_instance, celery_worker_instance, celery_beat_instance] + app_server_instances
 
+for i in all_instances:
+    pulumi.export(f'ssh_via_bastion_example_{i._name}', 
+        pulumi.Output.concat(
+            'ssh -i ~/.ssh/', 
+            key_name, 
+            '.id_rsa -o ProxyCommand="ssh -i ~/.ssh/', 
+            key_name, 
+            '.id_rsa -W %h:%p ubuntu@', 
+            bastion_instance.public_ip, 
+            '" ubuntu@', 
+            i.private_ip
+        )
+    )

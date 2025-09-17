@@ -20,29 +20,61 @@ A high-performance, scalable URL shortener service built with FastAPI, featuring
 
 ```mermaid
 graph TD
-    subgraph "User Facing"
-        A[FastAPI App <br> Port 8000]
+    subgraph "External Layer"
+        U[Users]
     end
 
-    subgraph "Data Stores"
-        B[Redis Cache <br> Port 6379]
-        C[PostgreSQL <br> Key Management <br> Port 5432]
-        D[MongoDB <br> URL Storage <br> Port 27017]
+    subgraph "Load Balancing Tier"
+        H[Nginx Load Balancer<br/>Rate Limiter<br/>Ports 80/443]
     end
 
-    subgraph "Background Processing"
-        E[Celery Worker]
-        F[Celery Beat]
-        G[Celery Flower <br> Port 5555]
+    subgraph "Application Tier"
+        A[FastAPI Applications<br/>3 Replicas<br/>Port 8000]
     end
 
-    A --> B
-    A --> C
-    A --> D
-    E --> D
-    E --> C
-    F --> E
-    G --> E
+    subgraph "Processing Tier"
+        subgraph "Background Services"
+            F[Celery Beat<br/>Task Scheduler]
+            E[Celery Worker<br/>Task Processor<br/>4 Concurrency]
+            G[Celery Flower<br/>Monitoring<br/>Port 5555]
+        end
+    end
+
+    subgraph "Data Tier"
+        B[Redis<br/>Cache & Message Broker<br/>Port 6379]
+        C[PostgreSQL<br/>Key Management<br/>Port 5432]
+        D[MongoDB<br/>URL Storage<br/>Port 27017]
+    end
+
+    %% User Traffic Flow
+    U -->|HTTP/HTTPS| H
+    H -->|Load Balanced| A
+    H -->|Monitoring Access| G
+
+    %% Application Data Access
+    A -->|Cache Lookup| B
+    A -->|Key Management| C
+    A -->|URL Storage| D
+
+    %% Background Processing Flow
+    F -->|Schedule Tasks| E
+    E -->|Message Queue| B
+    E -->|Key Operations| C
+    E -->|URL Operations| D
+    G -->|Monitor| E
+
+    %% Styling for clarity
+    classDef loadTier fill:#ffebee
+    classDef appTier fill:#e8f5e8
+    classDef processTier fill:#fff3e0
+    classDef dataTier fill:#e3f2fd
+    classDef external fill:#f3e5f5
+    
+    class U external
+    class H loadTier
+    class A appTier
+    class F,E,G processTier
+    class B,C,D dataTier
 ```
 
 ### AWS Architecture
@@ -78,26 +110,42 @@ graph TD
         end
     end
 
-    %% Traffic flows
-    L -->|HTTPS| A
+    %% User Traffic Flow
+    L -->|HTTP/HTTPS| A
     A -->|Load Balanced Traffic| C
+
+    %% Application Data Access
     C -->|Data Access| D
     C -->|Data Access| E
     C -->|Data Access| F
+
+    %% Background Processing Flow
+    J -->|Task Scheduling| I
+    K -->|Task Monitoring| I
     I -->|Task Processing| D
     I -->|Task Processing| E
     I -->|Task Processing| F
 
-    %% Admin access (dotted lines)
+    %% Admin Access (SSH Tunnels)
     M -.->|SSH| B
     B -.->|SSH Tunnel| C
-    B -.->|SSH Tunnel| I
     B -.->|SSH Tunnel| D
     B -.->|SSH Tunnel| E
     B -.->|SSH Tunnel| F
-    B -.->|SSH Tunnel| K
+    B -.->|SSH Tunnel| I
     B -.->|SSH Tunnel| J
-
+    B -.->|SSH Tunnel| K
+    
+    %% Styling for clarity
+    classDef publicTier fill:#e1f5fe
+    classDef appTier fill:#f3e5f5
+    classDef processTier fill:#fff3e0
+    classDef dataTier fill:#e8f5e8
+    
+    class A,B publicTier
+    class C appTier
+    class J,I,K processTier
+    class D,E,F dataTier
 ```
 
 ## AWS Infrastructure

@@ -3,7 +3,7 @@ from typing import Optional, Any, List
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+load_dotenv("../../.env")
 
 class Settings(BaseSettings):
 
@@ -35,5 +35,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+
 
 settings = Settings()

@@ -1,0 +1,92 @@
+# =============================================================================
+# PULUMI STACK OUTPUTS (Auto-generated)
+# =============================================================================
+bastion_public_ip: 18.143.150.182
+lb_public_ip: 54.169.100.144
+app_server_1_private_ip: 10.0.2.45
+app_server_2_private_ip: 10.0.2.124
+app_server_3_private_ip: 10.0.2.158
+redis_private_ip: 10.0.2.39
+postgres_private_ip: 10.0.2.37
+mongo_private_ip: 10.0.2.157
+celery_worker_private_ip: 10.0.2.135
+celery_beat_private_ip: 10.0.2.106
+celery_flower_private_ip: 10.0.2.219
+private_subnet_cidr: 10.0.2.0/24
+
+# =============================================================================
+# SSH CONFIGURATION
+# =============================================================================
+key_file_path: "~/.ssh/url-shortener-keypair.id_rsa"
+
+# =============================================================================
+# DATABASE CONFIGURATION
+# =============================================================================
+postgres_user: "url_shortener_user"
+postgres_password: "pgpassword"
+postgres_db: "url_shortener_keys"
+
+redis_password: ""
+
+mongo_db_name: "url_shortener_db"
+
+# =============================================================================
+# APPLICATION CONFIGURATION
+# =============================================================================
+app_name: "url_shortener"
+app_user: "ubuntu"
+app_group: "ubuntu"
+app_home: "/home/{{ app_user }}/{{ app_name }}"
+app_source_dir: "/opt/{{ app_name }}"
+playbook_dir: /mnt/e/url_shortener_scalable/ansible/
+project_dir: /mnt/e/url_shortener_scalable
+# =============================================================================
+# DOCKER CONFIGURATION
+# =============================================================================
+docker_compose_version: "2.24.0"
+docker_compose_install_path: "/usr/local/bin/docker-compose"
+
+# =============================================================================
+# NETWORK PORTS
+# =============================================================================
+app_port: 8000
+redis_port: 6379
+postgres_port: 5432
+mongo_port: 27017
+flower_port: 5555
+
+# =============================================================================
+# CELERY CONFIGURATION
+# =============================================================================
+celery_worker_concurrency: 4
+celery_beat_schedule_file: "/tmp/celerybeat-schedule"
+key_population_count: 50
+key_population_schedule: 300  # seconds
+cleanup_expired_schedule: 86400  # daily
+
+# =============================================================================
+# NGINX CONFIGURATION
+# =============================================================================
+nginx_user: "www-data"
+nginx_group: "www-data"
+nginx_log_dir: "/var/log/nginx"
+nginx_cache_dir: "/var/cache/nginx"
+
+# =============================================================================
+# SYSTEM CONFIGURATION
+# =============================================================================
+timezone: "UTC"
+locale: "en_US.UTF-8"
+
+# =============================================================================
+# SECURITY CONFIGURATION
+# =============================================================================
+ssh_port: 22
+fail2ban_enabled: true
+ufw_enabled: true
+
+# =============================================================================
+# MONITORING & LOGGING
+# =============================================================================
+log_level: "INFO"
+

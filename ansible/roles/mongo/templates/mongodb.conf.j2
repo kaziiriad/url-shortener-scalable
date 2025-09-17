@@ -1,0 +1,12 @@
+# mongodb.conf
+
+# Where to store the data.
+dbpath=/var/lib/mongodb
+
+# where to log
+logpath=/var/log/mongodb/mongodb.log
+logappend=true
+
+# network interfaces
+bind_ip = {{ ansible_host }}
+port = {{ mongo_port | default(27017) }}

@@ -1,0 +1,23 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Install common packages
+  apt:
+    name: ["curl", "wget", "git"]
+    state: present
+    
+- name: Create app directory
+  file:
+    path: /app
+    state: directory
+    mode: '0755'
+    owner: ubuntu
+    group: ubuntu
+    recurse: yes
+  
+- name: Copy .env file
+  template:
+    src: templates/env.j2
+    dest: /app/.env

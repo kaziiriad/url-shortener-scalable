@@ -6,7 +6,7 @@ from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.db.nosql.connection import get_db
 from app.db.sql.models import URL
-from app.db.sql.connection import AsyncSessionLocal
+from app.db.sql.connection import get_celery_db_session
 from sqlalchemy import select, update
 
 logger = logging.getLogger(__name__)
@@ -80,7 +80,9 @@ async def _async_cleanup_expired_keys():
         # Reset PostgreSQL keys to unused
         keys_reset = 0
         if expired_keys:
-            async with AsyncSessionLocal() as session:
+            session_gen = get_celery_db_session()
+            session = await session_gen.__anext__()
+            try:
                 # Update keys back to unused status
                 stmt = update(URL).where(
                     URL.key.in_(expired_keys),
@@ -92,6 +94,8 @@ async def _async_cleanup_expired_keys():
                 await session.commit()
                 
                 logger.info(f"Reset {keys_reset} keys to unused status in PostgreSQL")
+            finally:
+                await session_gen.aclose()
         
         return {
             "status": "success", 

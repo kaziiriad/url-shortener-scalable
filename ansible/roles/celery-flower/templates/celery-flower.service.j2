@@ -1,0 +1,28 @@
+[Unit]
+Description=Celery Flower Service
+After=network.target
+
+[Service]
+Type=exec
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/app
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONPATH=/app
+Environment=UV_CACHE_DIR=/app/.uv_cache
+Environment=FLOWER_UNAUTHENTICATED_API=true
+ExecStart=/usr/local/bin/uv run celery -A app.core.celery_app flower --port=5555 --address=0.0.0.0 --loglevel=info --broker=redis://{{ redis_private_ip }}:6379/1 --auto_refresh=True --enable_events=True
+Restart=always
+RestartSec=3
+
+# Environment variables
+EnvironmentFile=/app/.env
+
+# Security settings (temporarily relaxed for debugging)
+# NoNewPrivileges=true
+# ProtectSystem=strict
+# ProtectHome=true
+ReadWritePaths=/app
+
+[Install]
+WantedBy=multi-user.target

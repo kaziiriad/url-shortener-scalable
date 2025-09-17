@@ -16,6 +16,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting URL Shortener application...")
     try:
+        
         await init_database()
         logger.info("✅ Database initialized successfully")
     except Exception as e:

@@ -1,0 +1,25 @@
+[Unit]
+Description=Celery Worker Service
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/app
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONPATH=/app
+Environment=UV_CACHE_DIR=/app/.uv_cache
+ExecStart=/usr/local/bin/uv run celery -A app.core.celery_app worker --loglevel=info
+Restart=always
+
+EnvironmentFile=/app/.env
+
+# Security settings (temporarily relaxed for debugging)
+# NoNewPrivileges=true
+# ProtectSystem=strict
+# ProtectHome=true
+ReadWritePaths=/app
+
+[Install]
+WantedBy=multi-user.target

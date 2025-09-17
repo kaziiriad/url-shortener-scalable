@@ -1,0 +1,61 @@
+---
+- name: Clean up app and celery servers
+  hosts: app_servers:celery_services
+  become: yes
+  tasks:
+    - name: Stop all application services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - web
+        - celery-worker
+        - celery-beat
+        - celery-flower
+      ignore_errors: yes
+
+    - name: Remove systemd service files
+      file:
+        path: "/etc/systemd/system/{{ item }}.service"
+        state: absent
+      loop:
+        - web
+        - celery-worker
+        - celery-beat
+        - celery-flower
+      ignore_errors: yes
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Remove application directory
+      file:
+        path: /app
+        state: absent
+
+    - name: Remove uv installation
+      file:
+        path: /usr/local/bin/uv
+        state: absent
+      ignore_errors: yes
+
+    - name: Remove uvx installation
+      file:
+        path: /usr/local/bin/uvx
+        state: absent
+      ignore_errors: yes
+
+    - name: Clean up any remaining processes
+      shell: pkill -f "uvicorn\|celery" || true
+      ignore_errors: yes
+
+    - name: Remove temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/app.tar.gz
+        - /tmp/app
+      ignore_errors: yes

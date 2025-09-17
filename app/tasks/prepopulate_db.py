@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from app.db.sql.models import URL
-from app.db.sql.connection import AsyncSessionLocal
+from app.db.sql.connection import get_celery_db_session
 from app.core.celery_app import celery_app
 from app.core.config import settings
 
@@ -38,9 +38,13 @@ def pre_populate_keys(self, count: int = None):
 
 async def _async_pre_populate_keys(count: int):
     """Helper function to handle async DB operations."""
-    # Use the existing connection pool - much more efficient!
-    async with AsyncSessionLocal() as session:
+    # Use fresh database session for each Celery task to avoid connection conflicts
+    session_gen = get_celery_db_session()
+    session = await session_gen.__anext__()
+    try:
         await URL.pre_populate_keys(session, count)
+    finally:
+        await session_gen.aclose()
 
 # Periodic task configuration is now handled in celery_app.py
 

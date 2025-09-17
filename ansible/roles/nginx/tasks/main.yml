@@ -1,0 +1,29 @@
+---
+- name: Install Nginx
+  apt:
+    name: nginx
+    state: present
+
+- name: Create Nginx cache directory
+  file:
+    path: /var/cache/nginx/redirects
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+
+- name: Copy Nginx configuration
+  template:
+    src: "{{ playbook_dir }}/roles/nginx/templates/nginx.conf.j2"
+    dest: /etc/nginx/sites-available/default
+
+- name: Test Nginx configuration
+  command: nginx -t
+  register: nginx_test
+  changed_when: false
+
+- name: Restart Nginx
+  service:
+    name: nginx
+    state: restarted
+  when: nginx_test.rc == 0

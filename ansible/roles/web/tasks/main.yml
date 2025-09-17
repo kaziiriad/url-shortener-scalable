@@ -1,0 +1,138 @@
+---
+- name: Create app directory
+  file:
+    path: /app
+    state: directory
+    mode: '0755'
+    owner: ubuntu
+    group: ubuntu
+
+- name: Create uv cache directory
+  file:
+    path: /app/.uv_cache
+    state: directory
+    mode: '0755'
+    owner: ubuntu
+    group: ubuntu
+
+# Method 1: Install UV system-wide directly (Recommended)
+- name: Install uv system-wide as root
+  shell: |
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh
+  become: true
+  become_user: root
+  args:
+    creates: /usr/local/bin/uv
+
+# Method 2: Alternative - Install as user, then copy as root
+- name: Install uv to user directory (fallback)
+  shell: curl -LsSf https://astral.sh/uv/install.sh | sh
+  become_user: ubuntu
+  args:
+    creates: /home/ubuntu/.local/bin/uv
+  when: true  # Enable this method if preferred
+
+- name: Copy uv binaries to system location with correct ownership
+  copy:
+    src: "/home/ubuntu/.local/bin/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    mode: '0755'
+    owner: root
+    group: root
+    remote_src: yes
+  become: true
+  loop:
+    - uv
+    - uvx
+  when: true  # Enable this method if preferred
+
+- name: Remove user installation after system copy
+  file:
+    path: "/home/ubuntu/.local/bin/{{ item }}"
+    state: absent
+  loop:
+    - uv
+    - uvx
+  when: true  # Enable this method if preferred
+
+# Add /usr/local/bin to PATH for all users
+- name: Add /usr/local/bin to system PATH
+  lineinfile:
+    path: /etc/environment
+    regexp: '^PATH='
+    line: 'PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"'
+    state: present
+  become: true
+
+- name: Verify uv is accessible system-wide
+  command: which uv
+  register: uv_location
+  changed_when: false
+
+- name: Display uv location
+  debug:
+    msg: "UV installed at: {{ uv_location.stdout }}"
+
+
+- name: copy pyproject.toml
+  copy:
+    src: "{{ project_dir }}/pyproject.toml"
+    dest: /app/pyproject.toml
+
+    
+- name: Create a local archive of the app directory
+  community.general.archive:
+    path: "{{ project_dir }}/app"
+    dest: "/tmp/app.tar.gz"
+    format: gz
+  delegate_to: localhost
+
+- name: Copy the application archive to the server
+  copy:
+    src: "/tmp/app.tar.gz"
+    dest: "/tmp/app.tar.gz"
+
+- name: Unarchive the application on the server
+  unarchive:
+    src: "/tmp/app.tar.gz"
+    dest: "/app"
+    remote_src: yes
+
+- name: Clean up the local archive
+  file:
+    path: "/tmp/app.tar.gz"
+    state: absent
+  delegate_to: localhost
+
+- name: Verify application structure
+  stat:
+    path: /app/app/main.py
+  register: app_main_check
+
+- name: Display application structure
+  debug:
+    msg: "Application structure check: {{ app_main_check.stat.exists }}"
+
+- name: Install dependencies with full path (ensure system uv is used)
+  command: /usr/local/bin/uv sync
+  args:
+    chdir: /app
+  become: true
+
+
+- name: Create systemd service for the application
+  template:
+    src: templates/web.service.j2
+    dest: /etc/systemd/system/web.service
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+- name: Start and enable the application service
+  systemd:
+    name: web
+    state: started
+    enabled: yes
+
+

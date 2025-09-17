@@ -1,0 +1,22 @@
+---
+- name: Install Redis
+  apt:
+    name: redis-server
+    state: present
+
+- name: Configure Redis
+  lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: "^bind 127.0.0.1 ::1"
+    line: "bind {{ ansible_host }}"
+
+- name: Disable protected mode
+  lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: "^protected-mode yes"
+    line: "protected-mode no"
+
+- name: Restart Redis
+  service:
+    name: redis-server
+    state: restarted

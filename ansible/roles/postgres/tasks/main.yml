@@ -1,0 +1,64 @@
+---
+- name: Install PostgreSQL
+  apt:
+    name: postgresql
+    state: present
+
+- name: Start and enable PostgreSQL
+  service:
+    name: postgresql
+    state: started
+    enabled: yes
+
+- name: Wait for PostgreSQL to be ready
+  wait_for:
+    port: 5432
+    host: localhost
+    delay: 5
+    timeout: 30
+
+- name: Create database user (if different from postgres)
+  shell: |
+    sudo -u postgres psql -c "CREATE USER {{ postgres_user }} WITH PASSWORD '{{ postgres_password }}';" || true
+  args:
+    executable: /bin/bash
+  when: postgres_user != "postgres"
+
+- name: Create database
+  shell: |
+    sudo -u postgres psql -c "CREATE DATABASE {{ postgres_db }} OWNER {{ postgres_user }};" || true
+  args:
+    executable: /bin/bash
+
+- name: Find PostgreSQL configuration directory
+  shell: find /etc/postgresql -name "postgresql.conf" | head -1 | xargs dirname
+  register: postgres_conf_dir
+  changed_when: false
+
+- name: Configure PostgreSQL to listen on all addresses
+  lineinfile:
+    path: "{{ postgres_conf_dir.stdout }}/postgresql.conf"
+    regexp: "^#?listen_addresses = 'localhost'"
+    line: "listen_addresses = '*'"
+    backup: yes
+
+- name: Configure PostgreSQL to allow MD5 authentication
+  lineinfile:
+    path: "{{ postgres_conf_dir.stdout }}/pg_hba.conf"
+    regexp: "^host    all             all             127.0.0.1/32            scram-sha-256"
+    line: "host    all             all             {{ private_subnet_cidr }}               md5"
+    backup: yes
+
+- name: Disable SSL for internal network (avoid keyring permission issues)
+  lineinfile:
+    path: "{{ postgres_conf_dir.stdout }}/postgresql.conf"
+    regexp: "^#?ssl = (on|off)"
+    line: "ssl = off"
+    backup: yes
+  # SSL is disabled for internal VPC communication to avoid permission issues
+  # with PostgreSQL keyring files when services run as non-root users
+
+- name: Restart PostgreSQL
+  service:
+    name: postgresql
+    state: restarted

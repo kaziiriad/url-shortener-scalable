@@ -1,0 +1,52 @@
+---
+- hosts: load_balancer
+  become: true
+  roles:
+    - role: common
+    - role: nginx
+
+- hosts: app_servers
+  become: true
+  roles:
+    - role: common
+    - role: web
+
+- hosts: databases
+  become: true
+  roles:
+    - role: common
+  tasks:
+    - name: Setup Redis
+      include_role:
+        name: redis
+      when: server_type == "redis"
+    
+    - name: Setup PostgreSQL
+      include_role:
+        name: postgres
+      when: server_type == "postgres"
+    
+    - name: Setup MongoDB
+      include_role:
+        name: mongo
+      when: server_type == "mongodb"
+
+- hosts: celery_services
+  become: true
+  roles:
+    - role: common
+  tasks:
+    - name: Setup Celery Worker
+      include_role:
+        name: celery-worker
+      when: server_type == "celery_worker"
+    
+    - name: Setup Celery Beat
+      include_role:
+        name: celery-beat
+      when: server_type == "celery_beat"
+    
+    - name: Setup Celery Flower
+      include_role:
+        name: celery-flower
+      when: server_type == "celery_flower"

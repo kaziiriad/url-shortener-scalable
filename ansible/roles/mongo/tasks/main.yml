@@ -1,0 +1,35 @@
+---
+- name: Install prerequisites for MongoDB repository
+  apt:
+    name:
+      - gnupg
+      - curl
+    state: present
+    update_cache: yes
+
+- name: Import MongoDB GPG key
+  apt_key:
+    url: https://www.mongodb.org/static/pgp/server-8.0.asc
+    keyring: /usr/share/keyrings/mongodb-server-8.0.gpg
+    state: present
+
+- name: Add MongoDB repository
+  apt_repository:
+    repo: "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/8.0 multiverse"
+    state: present
+    filename: mongodb-org-8.0
+
+- name: Install MongoDB
+  apt:
+    name: mongodb-org
+    state: present
+
+- name: Configure MongoDB from template
+  template:
+    src: mongod.conf.j2
+    dest: /etc/mongod.conf
+    owner: mongodb
+    group: mongodb
+    mode: '0644'
+  notify:
+    - restart mongod
