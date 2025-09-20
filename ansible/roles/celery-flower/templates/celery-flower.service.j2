@@ -1,28 +1,60 @@
 [Unit]
-Description=Celery Flower Service
+Description=Celery Flower Monitoring Service
+Documentation=https://flower.readthedocs.io/
 After=network.target
+Wants=redis.service
 
 [Service]
 Type=exec
 User=ubuntu
 Group=ubuntu
 WorkingDirectory=/app
+
+# Environment setup
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 Environment=PYTHONPATH=/app
 Environment=UV_CACHE_DIR=/app/.uv_cache
 Environment=FLOWER_UNAUTHENTICATED_API=true
-ExecStart=/usr/local/bin/uv run celery -A app.core.celery_app --broker=redis://{{ redis_private_ip }}:6379/1 flower --port=5555 --url_prefix=/flower --auto_refresh=True --enable_events=True
+Environment=FLOWER_BASIC_AUTH=
+Environment=FLOWER_AUTO_REFRESH=True
+
+# Start Flower WITHOUT url_prefix since nginx handles path rewriting
+ExecStart=/usr/local/bin/uv run celery \
+    -A app.core.celery_app \
+    --broker=redis://{{ redis_private_ip }}:6379/1 \
+    flower \
+    --port=5555 \
+    --address=0.0.0.0 \
+    --auto_refresh=True \
+    --enable_events=True \
+    --persistent=True \
+    --db=/app/flower.db \
+    --max_tasks=10000
+
+# Service management
 Restart=always
-RestartSec=3
+RestartSec=5
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
 
-# Environment variables
-EnvironmentFile=/app/.env
+# Environment file for additional config
+EnvironmentFile=-/app/.env
 
-# Security settings (temporarily relaxed for debugging)
-# NoNewPrivileges=true
-# ProtectSystem=strict
-# ProtectHome=true
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=32768
+
+# Security settings
+NoNewPrivileges=true
 ReadWritePaths=/app
+ProtectHome=true
+ProtectSystem=strict
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=celery-flower
 
 [Install]
 WantedBy=multi-user.target

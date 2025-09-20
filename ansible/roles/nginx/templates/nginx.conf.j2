@@ -101,51 +101,104 @@ server {
         proxy_next_upstream_timeout 10s;
     }
 
-# Flower monitoring - Correct configuration for url_prefix=/flower
-    location /flower/ {
-        # Proxy with trailing slash - Flower with url_prefix=/flower expects this
-        proxy_pass http://{{ celery_flower_private_ip }}:5555/;
+    # Flower monitoring - Complete solution for AWS deployment
+    # Handle /flower redirect
+    location = /flower {
+        return 301 /flower/;
+    }
+
+    # Handle direct navigation links (workers, tasks, broker, monitor)
+    # These catch the absolute paths that Flower generates in its navigation
+    location ~ ^/(workers?|tasks?|broker|monitor|api)(/.*)?$ {
+        # Redirect to /flower/ prefixed version
+        return 301 /flower$uri$is_args$args;
+    }
+
+    # Main Flower application - handles all non-static routes
+    location ~ ^/flower/(?!static/) {
+        # Remove /flower prefix and pass to Flower
+        rewrite ^/flower/(.*) /$1 break;
+        rewrite ^/flower/$ / break;
+        
+        proxy_pass http://{{ celery_flower_private_ip }}:5555;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         
-        # Critical: Handle redirects properly
-        proxy_redirect http://{{ celery_flower_private_ip }}:5555/flower/ /flower/;
+        # Critical: Handle redirects by rewriting them back to /flower/
         proxy_redirect http://{{ celery_flower_private_ip }}:5555/ /flower/;
+        proxy_redirect / /flower/;
         
-        # Handle WebSocket connections for real-time updates
+        # WebSocket support for real-time updates
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         
-        # Timeouts for monitoring interface
-        proxy_connect_timeout 10s;
-        proxy_send_timeout 30s;
-        proxy_read_timeout 30s;
-        
-        # Disable buffering for real-time updates
+        # Disable buffering for real-time content
         proxy_buffering off;
         proxy_cache off;
         
-        # Fix Flower's internal links in HTML content
-        sub_filter 'href="/"' 'href="/flower/"';
+        # Extended timeouts
+        proxy_connect_timeout 30s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+        
+        # Add response transformation to fix navigation links
         sub_filter 'href="/workers"' 'href="/flower/workers"';
         sub_filter 'href="/tasks"' 'href="/flower/tasks"';
         sub_filter 'href="/broker"' 'href="/flower/broker"';
+        sub_filter 'href="/monitor"' 'href="/flower/monitor"';
+        sub_filter 'href="/api/' 'href="/flower/api/';
         sub_filter_once off;
         sub_filter_types text/html;
-        
-        # Handle CORS for AJAX requests
-        add_header Access-Control-Allow-Origin * always;
-        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE" always;
-        add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range" always;
     }
 
-    # Handle root flower redirect
-    location = /flower {
-        return 301 /flower/;
-    }    
+    # Handle Flower static assets specifically
+    location ~ ^/flower/static/ {
+        # Remove /flower prefix and pass to Flower's static handler
+        rewrite ^/flower/(.*) /$1 break;
+        
+        proxy_pass http://{{ celery_flower_private_ip }}:5555;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Cache static assets
+        proxy_cache_valid 200 1h;
+        expires 1h;
+        add_header Cache-Control "public";
+        
+        # Don't redirect static assets
+        proxy_redirect off;
+        
+        # Buffer static content
+        proxy_buffering on;
+        proxy_buffer_size 4k;
+        proxy_buffers 8 4k;
+    }
+
+    # Handle requests for static assets that come without /flower prefix
+    # This catches the absolute paths that Flower generates in its HTML
+    location ~ ^/static/(css|js|favicon\.ico) {
+        proxy_pass http://{{ celery_flower_private_ip }}:5555;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Cache static assets
+        proxy_cache_valid 200 1h;
+        expires 1h;
+        add_header Cache-Control "public";
+        
+        proxy_redirect off;
+        proxy_buffering on;
+        proxy_buffer_size 4k;
+        proxy_buffers 8 4k;
+    }
+    
     # API Documentation endpoint (FastAPI docs) - without trailing slash
     location = /docs {
         limit_req zone=api_general burst=5 nodelay;
