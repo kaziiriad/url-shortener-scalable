@@ -6,12 +6,13 @@ A high-performance, scalable URL shortener service built with FastAPI, featuring
 
 - **Fast URL Shortening**: Generate short URLs with pre-populated keys for instant response.
 - **Redis Caching**: Lightning-fast redirects with Redis-first lookup.
-- **Dual Database**: PostgreSQL for pre-populating and managing a pool of short URL keys, and MongoDB for storing the mapping between short and long URLs.
+- **Dual Database**: PostgreSQL for pre-populating and managing a pool of short URL keys, and MongoDB for storing the mapping between short and long URLs (MongoDB v6.0).
 - **Background Tasks**: Celery workers for key pre-population and cleanup.
-- **Monitoring**: Celery Flower dashboard for task monitoring.
+- **Monitoring**: Celery Flower dashboard for task monitoring, accessible via Nginx proxy with proper static asset and API routing.
+- **Automated Testing**: Comprehensive `pytest` framework with mocking for robust unit and integration tests.
 - **Containerized**: Full Docker setup with docker-compose.
 - **Scalable Architecture**: Microservice design ready for horizontal scaling.
-- **Load Balancing and Rate Limiting**: Nginx load balancer with rate limiting and caching.
+- **Load Balancing and Rate Limiting**: Nginx load balancer with rate limiting and caching, including routing for FastAPI documentation and OpenAPI schema.
 - **AWS Infrastructure as Code**: AWS infrastructure managed with Pulumi.
 
 ## 🏗️ Architecture
@@ -68,7 +69,6 @@ graph TD
     classDef appTier fill:#e8f5e8
     classDef processTier fill:#fff3e0
     classDef dataTier fill:#e3f2fd
-    classDef external fill:#f3e5f5
     
     class U external
     class H loadTier
@@ -212,6 +212,15 @@ This project uses Ansible to automate the configuration and deployment of the ap
     - Configure all services (Nginx, PostgreSQL, Redis, MongoDB).
     - Deploy the FastAPI application.
     - Set up and start the Celery workers, beat, and Flower dashboard.
+
+**Note on MongoDB Version:** The Ansible playbook is configured to install MongoDB version 6.0.
+
+**Troubleshooting MongoDB:**
+If you encounter issues with MongoDB, you can use the `cleanup_mongodb.sh` script to completely remove and reinstall MongoDB on a server. This script is located in the project root.
+
+```bash
+./cleanup_mongodb.sh
+```
 
 ## Load Balancer and Rate Limiter
 
@@ -372,7 +381,7 @@ curl "http://localhost:8000/health"
 | **web_app** | 8000 | Main FastAPI application |
 | **redis** | 6379 | Cache for fast URL lookups |
 | **postgres** | 5432 | Primary database for URL key management |
-| **mongo_db** | 27017 | Database for URL storage and analytics |
+| **mongo_db** | 27017 | Database for URL storage and analytics (MongoDB v6.0) |
 | **celery_worker** | - | Background task processor |
 | **celery_beat** | - | Periodic task scheduler |
 | **celery_flower** | 5555 | Task monitoring dashboard |
@@ -390,7 +399,7 @@ Monitor tasks at: http://localhost:5555
 
 ```
 url_shortener_scalable/
-├── app/
+├── app/                   # Main application source code
 │   ├── core/              # Core configuration and utilities
 │   ├── db/                # Database connections and models
 │   │   ├── sql/           # PostgreSQL models and operations
@@ -399,24 +408,48 @@ url_shortener_scalable/
 │   ├── routes/            # API route handlers
 │   ├── services/          # Business logic services
 │   ├── tasks/             # Celery background tasks
+│   ├── Dockerfile         # Dockerfile for the application
 │   └── main.py            # FastAPI application entry point
+├── ansible/               # Ansible playbooks and roles for deployment
+├── tests/                 # Automated tests (unit, integration, API)
 ├── .dockerignore
 ├── .env
 ├── .gitignore
 ├── .python-version
-├── docker-compose.yml     # Multi-service Docker setup
-├── Dockerfile
-├── Dockerfile.original
-├── pyproject.toml        # Python dependencies and project config
-├── README.md             # This file
+├── docker-compose.yml     # Multi-service Docker setup for local development
+├── docker-compose-lb.yml  # Docker Compose for load-balanced setup
+├── nginx-lb.conf          # Nginx configuration for load balancer
+├── pyproject.toml         # Python dependencies and project config
+├── README.md              # This file
 └── uv.lock
 ```
 
 ## 🧪 Testing
 
+### Automated Testing
+
+The project now includes a comprehensive automated testing framework using `pytest`.
+
+**Key Features:**
+- **Unit and Integration Tests**: Located in the `tests/` directory.
+- **Mocking**: Utilizes `mongomock` for MongoDB and `fakeredis` for Redis to enable fast and isolated tests without requiring live database connections.
+- **In-memory SQLite**: Uses `sqlite+aiosqlite:///:memory:` for PostgreSQL database testing, ensuring quick and clean test environments.
+- **API Testing**: Employs `httpx` for asynchronous API client testing.
+
+**Running Tests:**
+To run the automated tests, ensure you have activated your virtual environment and installed test dependencies (if using `uv`'s optional dependencies):
+
+```bash
+# If you have optional test dependencies defined in pyproject.toml
+uv sync --with test
+
+# Then run pytest
+pytest
+```
+
 ### Manual Testing
 
-The `README.md` provides instructions for manual testing. However, there are no automated tests in the project. It is highly recommended to add a testing framework like `pytest` and write unit and integration tests to ensure the reliability of the application.
+The `README.md` provides instructions for manual testing.
 
 ### Load Testing
 
