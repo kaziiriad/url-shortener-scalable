@@ -4,11 +4,11 @@ services:
   web_app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: app/Dockerfile
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
+      - ./app:/app
     environment:
       - HOST=0.0.0.0
       - PORT=8000
@@ -64,10 +64,10 @@ services:
   celery_worker:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: app/Dockerfile
     command: uv run celery -A app.core.celery_app worker --loglevel=info --hostname=worker1 --queues=db_tasks,cleanup_tasks,celery
     volumes:
-      - .:/app
+      - ./app:/app
     environment:
       - MONGO_URI=mongodb://mongo_db:27017
       - REDIS_HOST=redis
@@ -88,10 +88,10 @@ services:
   celery_beat:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: app/Dockerfile
     command: uv run celery -A app.core.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     volumes:
-      - .:/app
+      - ./app:/app
       - celery_beat_data:/tmp
     environment:
       - MONGO_URI=mongodb://mongo_db:27017
@@ -114,12 +114,12 @@ services:
   celery_flower:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: app/Dockerfile
     ports:
       - "5555:5555"
     command: uv run celery -A app.core.celery_app flower --port=5555 --loglevel=info --broker=redis://redis:6379/1 --auto_refresh=True --enable_events=True
     volumes:
-      - .:/app
+      - ./app:/app
     environment:
       - MONGO_URI=mongodb://mongo_db:27017
       - REDIS_HOST=redis

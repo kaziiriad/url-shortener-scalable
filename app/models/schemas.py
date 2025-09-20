@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from datetime import datetime
 from typing import Optional
 
@@ -6,8 +6,14 @@ class URLBase(BaseModel):
     long_url: str = Field(..., description="The long URL")
     user_id: Optional[str] = Field(default=None, description="The user ID")
 
+    @validator('long_url')
+    def validate_url(cls, v):
+        if not v.startswith('http://') and not v.startswith('https://'):
+            return f'https://{v}'
+        return v
+
 class URLCreate(URLBase):
-    expires_at: Optional[datetime] = Field(default=None, description="The expiration date")
+    pass
 
 class URLUpdate(BaseModel):
     long_url: Optional[str] = Field(default=None, description="The long URL")

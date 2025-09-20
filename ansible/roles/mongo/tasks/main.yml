@@ -1,35 +1,71 @@
 ---
-- name: Install prerequisites for MongoDB repository
-  apt:
-    name:
-      - gnupg
-      - curl
-    state: present
-    update_cache: yes
+# Simplified MongoDB deployment for URL Shortener
 
-- name: Import MongoDB GPG key
-  apt_key:
-    url: https://www.mongodb.org/static/pgp/server-8.0.asc
-    keyring: /usr/share/keyrings/mongodb-server-8.0.gpg
-    state: present
+- name: Install MongoDB GPG key
+  shell: |
+    curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/mongodb-6.gpg
+
+  args:
+    creates: /etc/apt/trusted.gpg.d/mongodb-6.gpg
+  become: true
 
 - name: Add MongoDB repository
   apt_repository:
-    repo: "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/8.0 multiverse"
+    repo: "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse"
     state: present
-    filename: mongodb-org-8.0
+  become: true
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+  become: true
 
 - name: Install MongoDB
   apt:
     name: mongodb-org
     state: present
+    update_cache: yes
+  become: true
 
-- name: Configure MongoDB from template
+- name: Create MongoDB configuration from template
   template:
-    src: mongod.conf.j2
+    src: templates/mongod.conf.j2
     dest: /etc/mongod.conf
     owner: mongodb
     group: mongodb
     mode: '0644'
-  notify:
-    - restart mongod
+  become: true
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+  become: true
+
+- name: Enable and start MongoDB service
+  systemd:
+    name: mongod
+    enabled: yes
+    state: started
+  become: true
+
+- name: Restart MongoDB
+  service:
+    name: mongod
+    state: restarted
+  become: true
+
+- name: Wait for MongoDB to be ready
+  wait_for:
+    port: 27017
+    host: localhost
+    delay: 5
+    timeout: 30
+
+- name: Test MongoDB connection
+  command: mongosh --eval "db.runCommand('ping')"
+  register: mongo_test
+  ignore_errors: true
+
+- name: Display MongoDB status
+  debug:
+    msg: "MongoDB is {{ 'running successfully' if mongo_test.rc == 0 else 'not responding properly' }}"

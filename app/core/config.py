@@ -6,7 +6,7 @@ import os
 load_dotenv("../../.env")
 
 class Settings(BaseSettings):
-
+    TESTING: bool = False
     mongo_uri: str = os.getenv("MONGO_URI", "mongodb://localhost:27017")
     
     redis_host: str = os.getenv("REDIS_HOST", "localhost")

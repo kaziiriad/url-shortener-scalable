@@ -1,17 +1,17 @@
 # =============================================================================
 # PULUMI STACK OUTPUTS (Auto-generated)
 # =============================================================================
-bastion_public_ip: 18.143.150.182
-lb_public_ip: 54.169.100.144
-app_server_1_private_ip: 10.0.2.45
-app_server_2_private_ip: 10.0.2.124
-app_server_3_private_ip: 10.0.2.158
-redis_private_ip: 10.0.2.39
-postgres_private_ip: 10.0.2.37
-mongo_private_ip: 10.0.2.157
-celery_worker_private_ip: 10.0.2.135
-celery_beat_private_ip: 10.0.2.106
-celery_flower_private_ip: 10.0.2.219
+bastion_public_ip: 13.212.21.82
+lb_public_ip: 13.250.21.192
+app_server_1_private_ip: 10.0.2.119
+app_server_2_private_ip: 10.0.2.137
+app_server_3_private_ip: 10.0.2.18
+redis_private_ip: 10.0.2.67
+postgres_private_ip: 10.0.2.74
+mongo_private_ip: 10.0.2.93
+celery_worker_private_ip: 10.0.2.72
+celery_beat_private_ip: 10.0.2.39
+celery_flower_private_ip: 10.0.2.50
 private_subnet_cidr: 10.0.2.0/24
 
 # =============================================================================
@@ -29,6 +29,8 @@ postgres_db: "url_shortener_keys"
 redis_password: ""
 
 mongo_db_name: "url_shortener_db"
+
+
 
 # =============================================================================
 # APPLICATION CONFIGURATION

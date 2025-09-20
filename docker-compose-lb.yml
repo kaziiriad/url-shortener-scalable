@@ -28,7 +28,7 @@ services:
   web_app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: ./app/Dockerfile
     expose:
       - "8000"
     volumes:
@@ -120,7 +120,7 @@ services:
   celery_worker:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: ./app/Dockerfile
     command: uv run celery -A app.core.celery_app worker --loglevel=info --hostname=worker1 --queues=db_tasks,cleanup_tasks,celery --concurrency=4
     volumes:
       - .:/app
@@ -151,7 +151,7 @@ services:
   celery_beat:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: ./app/Dockerfile
     command: uv run celery -A app.core.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     volumes:
       - .:/app
@@ -175,14 +175,13 @@ services:
       - postgres
     restart: unless-stopped
 
-  # Celery Flower - monitoring (optional for production)
   celery_flower:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: ./app/Dockerfile
     ports:
       - "5555:5555"
-    command: uv run celery -A app.core.celery_app flower --port=5555 --loglevel=info --broker=redis://redis:6379/1 --auto_refresh=True --enable_events=True
+    command: uv run celery -A app.core.celery_app flower --port=5555 --url_prefix=flower --loglevel=info --auto_refresh=True --enable_events=True
     volumes:
       - .:/app
     environment:
@@ -190,12 +189,13 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=
+      - CELERY_BROKER_URL=redis://redis:6379/1  # Add this for clarity
     networks:
       - url_shortener_network
     depends_on:
       - redis
     restart: unless-stopped
-
+    
 networks:
   url_shortener_network:
     driver: bridge

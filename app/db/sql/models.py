@@ -16,15 +16,29 @@ class URL(Base):
         return f"<URL(id={self.id}, key={self.key}, is_used={self.is_used})>"
     @staticmethod
     def generate_key():
-        return ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=7))
 
     @classmethod
     async def get_unused_key(cls, session):
-        result = await session.execute(select(cls).where(cls.is_used == False).limit(1))
-        return result.scalars().first()
+        # atomic operation
+        try:         
+            result = await session.execute(select(cls).where(cls.is_used == False).limit(1))
+            url = result.scalars().first()
+            if url is not None:
+                # mark the key as used
+                url.is_used = True
+                session.add(url)
+                await session.commit()
+                return url
+            else:
+                return None
+        except Exception as e:
+            await session.rollback()
+            raise e
 
     @classmethod
     async def pre_populate_keys(cls, session: AsyncSession, count: int = 100000):
+        # atomic operation
         try:
             # Generate unique keys to avoid duplicates
             existing_keys = set()

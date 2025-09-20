@@ -3,18 +3,9 @@ FROM python:3.12-slim-bookworm
 # The installer requires curl (and certificates) to download the release archive
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
 
-# Download the latest installer
-ADD https://astral.sh/uv/install.sh /uv-installer.sh
+# Install uv system-wide, so all users can access it
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh
 
-# Run the installer then remove it
-RUN sh /uv-installer.sh && rm /uv-installer.sh
-
-# Move uv to system-wide location so all users can access it
-# RUN mv /root/.local/bin/uv /usr/local/bin/uv && \
-#     chmod +x /usr/local/bin/uv
-
-# Ensure the installed binary is on the `PATH`
-ENV PATH="/root/.local/bin/:$PATH"
 
 # Create a non-root user with home directory
 # RUN groupadd -r appuser && useradd -r -g appuser -m -d /home/appuser appuser
@@ -23,7 +14,8 @@ WORKDIR /app
 
 # Copy project files first (excluding .venv via .dockerignore)
 COPY pyproject.toml .
-COPY . .
+COPY .env .
+COPY app/ .
 
 # Create a non-root user and change ownership
 # RUN chown -R appuser:appuser /app && \
