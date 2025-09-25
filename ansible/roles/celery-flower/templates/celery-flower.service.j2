@@ -18,13 +18,14 @@ Environment=FLOWER_UNAUTHENTICATED_API=true
 Environment=FLOWER_BASIC_AUTH=
 Environment=FLOWER_AUTO_REFRESH=True
 
-# Start Flower WITHOUT url_prefix since nginx handles path rewriting
+# Start Flower WITH url_prefix
 ExecStart=/usr/local/bin/uv run celery \
     -A app.core.celery_app \
     --broker=redis://{{ redis_private_ip }}:6379/1 \
     flower \
     --port=5555 \
     --address=0.0.0.0 \
+    --url_prefix=flower \
     --auto_refresh=True \
     --enable_events=True \
     --persistent=True \

@@ -43,6 +43,7 @@ async def _async_pre_populate_keys(count: int):
     session = await session_gen.__anext__()
     try:
         await URL.pre_populate_keys(session, count)
+        
     finally:
         await session_gen.aclose()
 

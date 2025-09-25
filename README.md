@@ -136,11 +136,6 @@ graph TD
     B -.->|SSH Tunnel| J
     B -.->|SSH Tunnel| K
     
-    %% Styling for clarity
-    classDef publicTier fill:#e1f5fe
-    classDef appTier fill:#f3e5f5
-    classDef processTier fill:#fff3e0
-    classDef dataTier fill:#e8f5e8
     
     class A,B publicTier
     class C appTier

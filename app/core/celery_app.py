@@ -1,13 +1,14 @@
-"""Celery application configuration."""
 import logging
 from celery import Celery
+from celery.signals import worker_init, worker_shutdown
 from app.core.config import settings
+from app.db.sql.connection import init_celery_db, close_celery_db # Import new functions
 
 logger = logging.getLogger(__name__)
 
 # Build Redis URL with auth if password exists
-redis_password = f":{settings.redis_password}@" if settings.redis_password else ""
-redis_url = f"redis://{redis_password}{settings.redis_host}:{settings.redis_port}/1"
+redis_password = f":{settings.redis_password}@{settings.redis_host}" if settings.redis_password else settings.redis_host
+redis_url = f"redis://{redis_password}:{settings.redis_port}/1"
 
 # Create Celery application
 celery_app = Celery(
@@ -50,3 +51,25 @@ celery_app.conf.beat_schedule = {
 
 # Set default timezone
 celery_app.conf.timezone = 'UTC'
+
+# --- Celery Worker Lifecycle Hooks for Database Connection Pooling ---
+@worker_init.connect
+def configure_celery_worker_db(sender=None, conf=None, **kwargs):
+    """Initialize database engine for Celery worker on startup."""
+    import asyncio
+    # Celery worker_init runs in a separate thread/process, so we need to manage event loop
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        loop.create_task(init_celery_db())
+    else:
+        loop.run_until_complete(init_celery_db())
+
+@worker_shutdown.connect
+def cleanup_celery_worker_db(sender=None, conf=None, **kwargs):
+    """Dispose of database engine for Celery worker on shutdown."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        loop.create_task(close_celery_db())
+    else:
+        loop.run_until_complete(close_celery_db())

@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Cleanup task configuration
     cleanup_expired_schedule: int = int(os.getenv("CLEANUP_EXPIRED_SCHEDULE", "86400"))  # daily
 
+    # Celery database connection pooling settings
+    celery_db_pool_size: int = int(os.getenv("CELERY_DB_POOL_SIZE", "4"))
+    celery_db_max_overflow: int = int(os.getenv("CELERY_DB_MAX_OVERFLOW", "8"))
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
