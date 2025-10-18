@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.routes.urls import url_router
+from app.routes.monitoring import monitoring_router
 from app.db.sql.init_db import init_database
 import uvicorn
 import logging
@@ -15,7 +16,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
     logger.info("🚀 Starting URL Shortener application...")
-    if not settings.TESTING:
+    if not settings.testing:
         try:
             await init_database()
             logger.info("✅ Database initialized successfully")
@@ -37,6 +38,7 @@ app = FastAPI(
 
 # Include API routes with prefix
 app.include_router(url_router, prefix="/api/v1", tags=["API"])
+app.include_router(monitoring_router, prefix="/monitoring", tags=["Monitoring"])
 
 @app.get("/")
 async def root():

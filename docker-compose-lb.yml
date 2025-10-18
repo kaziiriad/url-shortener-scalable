@@ -179,8 +179,6 @@ services:
     build:
       context: .
       dockerfile: ./app/Dockerfile
-    ports:
-      - "5555:5555"
     command: uv run celery -A app.core.celery_app flower --port=5555 --url_prefix=flower --loglevel=info --auto_refresh=True --enable_events=True
     volumes:
       - .:/app

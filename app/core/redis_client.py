@@ -23,4 +23,12 @@ class RedisClient:
     async def close(self) -> None:
         await self.redis_client.close()
 
+    async def ping(self) -> bool:
+        try:
+            await self.redis_client.ping()
+            return True
+        except Exception as e:
+            print(f"Redis ping failed: {e}")
+            return False
+            
         
