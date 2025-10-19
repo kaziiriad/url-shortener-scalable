@@ -1,13 +1,15 @@
 version: '3.8'
 
 services:
-  # Nginx Load Balancer
+  # ============================================
+  # LOAD BALANCER & REVERSE PROXY
+  # ============================================
   nginx_lb:
     image: nginx:alpine
     container_name: url_shortener_nginx_lb
     ports:
       - "80:80"
-      - "443:443"  # For future HTTPS setup
+      - "443:443"
     volumes:
       - ./nginx-lb.conf:/etc/nginx/conf.d/default.conf:ro
       - nginx_cache:/var/cache/nginx
@@ -15,10 +17,9 @@ services:
     networks:
       - url_shortener_network
     depends_on:
-      web_app:
-        condition: service_healthy
-      celery_flower:
-        condition: service_started
+      - web_app
+      - celery_flower
+        
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/nginx-health"]
@@ -30,9 +31,12 @@ services:
       - NGINX_WORKER_PROCESSES=auto
       - NGINX_WORKER_CONNECTIONS=1024
     labels:
-      - "com.url-shortener.service=load-balancer"
+      com.url-shortener.service: "load-balancer"
+      com.url-shortener.description: "Nginx load balancer and API gateway"
 
-  # Application Instances (3 replicas)
+  # ============================================
+  # APPLICATION LAYER (FastAPI)
+  # ============================================
   web_app:
     build:
       context: .
@@ -42,31 +46,85 @@ services:
     volumes:
       - .:/app
     environment:
+      # Application Config
       - HOST=0.0.0.0
       - PORT=8000
       - BASE_URL=http://localhost
-      - MONGO_URI=mongodb://mongo_db:27017
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
-      - DB_NAME=url_shortener
+      - TESTING=false
+      
+      # Instance Identification
+      - INSTANCE_ID=${HOSTNAME:-unknown}
+      
+      # Database Connections
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=pgpassword
-      # Connection pool settings (critical for distributed setup)
+      - DB_NAME=url_shortener
+      
+      # PostgreSQL Connection Pool (FastAPI)
       - DB_POOL_SIZE=10
       - DB_MAX_OVERFLOW=20
       - DB_POOL_TIMEOUT=30
       - DB_POOL_RECYCLE=3600
+      
+      # MongoDB Config
+      - MONGO_URI=mongodb://mongo_db:27017
+      - MONGO_DB_NAME=url_shortener
       - MONGO_MAX_POOL_SIZE=50
       - MONGO_MIN_POOL_SIZE=10
+      - MONGO_MAX_IDLE_TIME_MS=45000
+      
+      # Redis Config
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
       - REDIS_MAX_CONNECTIONS=50
-      # Instance identification for monitoring
-      - INSTANCE_ID=${HOSTNAME:-unknown}
-      # Number of instances for capacity planning
+      - REDIS_SOCKET_KEEPALIVE=true
+      - REDIS_SOCKET_TIMEOUT=5
+      
+      # Capacity Planning
       - NUM_FASTAPI_INSTANCES=3
       - NUM_CELERY_WORKERS=1
+      
+      # Key Management (Static - will be overridden by adaptive)
+      - KEY_POPULATION_COUNT=1000
+      - KEY_POPULATION_SCHEDULE=1800
+      - KEY_MINIMUM_THRESHOLD=1000
+      
+      # Adaptive Key Management (NEW)
+      - ENABLE_ADAPTIVE_GENERATION=true
+      - ENABLE_PREDICTIVE_GENERATION=true
+      - ENABLE_CONSUMPTION_TRACKING=true
+      - KEY_CRITICAL_THRESHOLD=100
+      - KEY_WARNING_THRESHOLD=1000
+      - KEY_HEALTHY_THRESHOLD=5000
+      - KEY_OPTIMAL_THRESHOLD=10000
+      - KEY_MAXIMUM_THRESHOLD=50000
+      - KEY_BATCH_EMERGENCY=5000
+      - KEY_BATCH_URGENT=2000
+      - KEY_BATCH_NORMAL=1000
+      - KEY_BATCH_MAINTENANCE=500
+      - ADAPTIVE_CHECK_INTERVAL=120
+      - PREDICTION_BUFFER_HOURS=4
+      
+      # Circuit Breaker & Retry Config
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+      - CIRCUIT_BREAKER_TIMEOUT=60
+      - DB_RETRY_ATTEMPTS=3
+      - DB_RETRY_DELAY=1.0
+      - DB_RETRY_BACKOFF=2.0
+      
+      # Task Configuration
+      - TASK_RETRY_DELAY=60
+      - TASK_MAX_RETRIES=3
+      - CLEANUP_EXPIRED_SCHEDULE=86400
+      
+      # Rate Limiting
+      - RATE_LIMIT_ENABLED=true
+      - CREATE_URL_RATE_LIMIT=10/minute
+      - REDIRECT_RATE_LIMIT=100/second
+    
     networks:
       - url_shortener_network
     depends_on:
@@ -78,24 +136,20 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      test: curl --fail http://localhost:8000/health || exit 1
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     deploy:
       replicas: 3
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
     labels:
-      - "com.url-shortener.service=api"
+      com.url-shortener.service: "api"
+      com.url-shortener.description: "FastAPI application instances"
 
-  # Redis - shared cache for all instances
+  # ============================================
+  # CACHE LAYER (Redis)
+  # ============================================
   redis:
     image: redis:7-alpine
     container_name: url_shortener_redis
@@ -121,9 +175,12 @@ services:
       --tcp-keepalive 60
       --timeout 300
     labels:
-      - "com.url-shortener.service=cache"
+      com.url-shortener.service: "cache"
+      com.url-shortener.description: "Redis cache and message broker"
 
-  # MongoDB
+  # ============================================
+  # DOCUMENT DATABASE (MongoDB)
+  # ============================================
   mongo_db:
     image: mongo:6.0
     container_name: url_shortener_mongodb
@@ -148,9 +205,12 @@ services:
       --wiredTigerCacheSizeGB 0.5
       --maxConns 200
     labels:
-      - "com.url-shortener.service=document-db"
+      com.url-shortener.service: "document-db"
+      com.url-shortener.description: "MongoDB for URL storage"
 
-  # PostgreSQL
+  # ============================================
+  # RELATIONAL DATABASE (PostgreSQL)
+  # ============================================
   postgres:
     image: postgres:15-alpine
     container_name: url_shortener_postgres
@@ -164,12 +224,6 @@ services:
       - POSTGRES_PASSWORD=pgpassword
       - POSTGRES_DB=url_shortener
       - POSTGRES_INITDB_ARGS=--encoding=UTF8 --lc-collate=C --lc-ctype=C
-      # Critical: Set max_connections based on capacity planning
-      # (3 FastAPI * 30 conns) + (1 Celery * 30 conns) + 20% buffer = ~150
-      - POSTGRES_MAX_CONNECTIONS=200
-      - POSTGRES_SHARED_BUFFERS=256MB
-      - POSTGRES_EFFECTIVE_CACHE_SIZE=1GB
-      - POSTGRES_WORK_MEM=4MB
     networks:
       - url_shortener_network
     restart: unless-stopped
@@ -179,6 +233,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    # PostgreSQL Performance Tuning
+    # Calculated for: 3 FastAPI (30 conns each) + 1 Celery (10 conns) + 20% buffer
     command: >
       postgres
       -c max_connections=200
@@ -191,40 +247,93 @@ services:
       -c wal_buffers=16MB
       -c min_wal_size=1GB
       -c max_wal_size=4GB
+      -c checkpoint_completion_target=0.9
+      -c max_wal_senders=3
+      -c wal_level=replica
     labels:
-      - "com.url-shortener.service=relational-db"
+      com.url-shortener.service: "relational-db"
+      com.url-shortener.description: "PostgreSQL for key management"
 
-  # Celery Worker - single instance for now, can be scaled
+  # ============================================
+  # BACKGROUND WORKERS (Celery Worker)
+  # ============================================
   celery_worker:
     build:
       context: .
       dockerfile: ./app/Dockerfile
     container_name: url_shortener_celery_worker
-    command: uv run celery -A app.core.celery_app worker --loglevel=info --hostname=worker1@%h --queues=db_tasks,cleanup_tasks,celery --concurrency=4
+    # CRITICAL: Use --pool=solo to avoid "Event loop is closed" errors
+    # solo = single-threaded, perfect for async/await tasks
+    # Alternative: --pool=threads --concurrency=4 (if you need concurrency)
+    command: >
+      uv run celery -A app.core.celery_app worker
+      --pool=solo
+      --loglevel=info
+      --hostname=worker1@%h
+      --queues=db_tasks,cleanup_tasks,celery
+      --max-tasks-per-child=1000
+      --time-limit=300
+      --soft-time-limit=240
     volumes:
       - .:/app
     environment:
-      - MONGO_URI=mongodb://mongo_db:27017
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
-      - DB_NAME=url_shortener
+      # Database Connections
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=pgpassword
+      - DB_NAME=url_shortener
+      
+      # Celery-specific Connection Pool (Optimized for solo pool)
+      - CELERY_DB_POOL_SIZE=5
+      - CELERY_DB_MAX_OVERFLOW=5
+      - CELERY_CONCURRENCY=1
+      
+      # MongoDB
+      - MONGO_URI=mongodb://mongo_db:27017
+      - MONGO_DB_NAME=url_shortener
+      - MONGO_MAX_POOL_SIZE=10
+      - MONGO_MIN_POOL_SIZE=5
+      
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      
+      # Key Management (Static)
       - KEY_POPULATION_COUNT=50
-      # Celery-specific connection pool settings
-      - CELERY_DB_POOL_SIZE=20
-      - CELERY_DB_MAX_OVERFLOW=10
-      - CELERY_CONCURRENCY=4
-      - MONGO_MAX_POOL_SIZE=50
+      - KEY_POPULATION_SCHEDULE=300
+      
+      # Adaptive Key Management (NEW)
+      - ENABLE_ADAPTIVE_GENERATION=true
+      - ENABLE_PREDICTIVE_GENERATION=true
+      - ENABLE_CONSUMPTION_TRACKING=true
+      - KEY_CRITICAL_THRESHOLD=100
+      - KEY_WARNING_THRESHOLD=1000
+      - KEY_HEALTHY_THRESHOLD=5000
+      - KEY_OPTIMAL_THRESHOLD=10000
+      - KEY_BATCH_EMERGENCY=5000
+      - KEY_BATCH_URGENT=2000
+      - KEY_BATCH_NORMAL=1000
+      - ADAPTIVE_CHECK_INTERVAL=120
+      
+      # Task Configuration
+      - TASK_RETRY_DELAY=60
+      - TASK_MAX_RETRIES=3
+      - CLEANUP_EXPIRED_SCHEDULE=86400
+      
+      # Circuit Breaker
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+      - CIRCUIT_BREAKER_TIMEOUT=60
+      
     networks:
       - url_shortener_network
     depends_on:
       redis:
         condition: service_healthy
       postgres:
+        condition: service_healthy
+      mongo_db:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -236,36 +345,57 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2'
-          memory: 1G
-        reservations:
           cpus: '1'
           memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
     labels:
-      - "com.url-shortener.service=background-worker"
+      com.url-shortener.service: "background-worker"
+      com.url-shortener.description: "Celery worker for async tasks"
+      com.url-shortener.pool: "solo"
 
-  # Celery Beat - scheduler
+  # ============================================
+  # TASK SCHEDULER (Celery Beat)
+  # ============================================
   celery_beat:
     build:
       context: .
       dockerfile: ./app/Dockerfile
     container_name: url_shortener_celery_beat
-    command: uv run celery -A app.core.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule --pidfile=/tmp/celerybeat.pid
+    command: >
+      uv run celery -A app.core.celery_app beat
+      --loglevel=info
+      --schedule=/tmp/celerybeat-schedule
+      --pidfile=/tmp/celerybeat.pid
     volumes:
       - .:/app
       - celery_beat_data:/tmp
     environment:
-      - MONGO_URI=mongodb://mongo_db:27017
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
-      - DB_NAME=url_shortener
+      # Database Connections
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=pgpassword
+      - DB_NAME=url_shortener
+      
+      # MongoDB
+      - MONGO_URI=mongodb://mongo_db:27017
+      - MONGO_DB_NAME=url_shortener
+      
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      
+      # Scheduling Config (Static - adaptive will override)
       - KEY_POPULATION_COUNT=50
       - KEY_POPULATION_SCHEDULE=300
+      - CLEANUP_EXPIRED_SCHEDULE=86400
+      
+      # Adaptive Scheduling (NEW)
+      - ADAPTIVE_CHECK_INTERVAL=120
+      
     networks:
       - url_shortener_network
     depends_on:
@@ -275,26 +405,40 @@ services:
         condition: service_healthy
     restart: unless-stopped
     labels:
-      - "com.url-shortener.service=scheduler"
+      com.url-shortener.service: "scheduler"
+      com.url-shortener.description: "Celery beat task scheduler"
 
-  # Celery Flower - monitoring dashboard
+  # ============================================
+  # MONITORING DASHBOARD (Celery Flower)
+  # ============================================
   celery_flower:
     build:
       context: .
       dockerfile: ./app/Dockerfile
     container_name: url_shortener_celery_flower
-    command: uv run celery -A app.core.celery_app flower --port=5555 --loglevel=info --auto_refresh=True --enable_events=True --basic_auth=admin:admin123
+    command: >
+      uv run celery -A app.core.celery_app flower
+      --port=5555
+      --loglevel=info
+      --auto_refresh=True
+      --enable_events=True
+      --max_tasks=10000
+      --persistent=True
+      --db=/data/flower.db
+      --url-prefix=flower
     expose:
       - "5555"
     volumes:
       - .:/app
+      - flower_data:/data
     environment:
-      - MONGO_URI=mongodb://mongo_db:27017
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=
       - CELERY_BROKER_URL=redis://redis:6379/1
-      - FLOWER_BASIC_AUTH=admin:admin123
+      - FLOWER_PERSISTENT=True
+      - FLOWER_DB=/data/flower.db
+      - FLOWER_UNAUTHENTICATED_API=true
     networks:
       - url_shortener_network
     depends_on:
@@ -308,27 +452,44 @@ services:
       retries: 3
       start_period: 30s
     labels:
-      - "com.url-shortener.service=monitoring"
-    
+      com.url-shortener.service: "monitoring"
+      com.url-shortener.description: "Celery Flower monitoring dashboard"
+
+# ============================================
+# NETWORKS
+# ============================================
 networks:
   url_shortener_network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.25.0.0/16
 
+# ============================================
+# VOLUMES
+# ============================================
 volumes:
-  mongo_data:
-    driver: local
-  mongo_config:
-    driver: local
-  redis_data:
-    driver: local
+  # Database volumes
   postgres_data:
     driver: local
+  
+  mongo_data:
+    driver: local
+  
+  mongo_config:
+    driver: local
+  
+  # Cache and messaging
+  redis_data:
+    driver: local
+  
+  # Celery data
   celery_beat_data:
     driver: local
+  
+  flower_data:
+    driver: local
+  
+  # Nginx data
   nginx_cache:
     driver: local
+  
   nginx_logs:
     driver: local
