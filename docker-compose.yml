@@ -270,7 +270,7 @@ services:
       --pool=solo
       --loglevel=info
       --hostname=worker1@%h
-      --queues=db_tasks,cleanup_tasks,celery
+      --queues=db_tasks,celery
       --max-tasks-per-child=1000
       --time-limit=300
       --soft-time-limit=240

@@ -64,13 +64,11 @@ class AsyncTask(Task):
     Base task class that properly handles async functions.
     Creates a new event loop for each task execution.
     """
-    
-    _loop = None
-    
+   
     def __call__(self, *args, **kwargs):
         """
         Override __call__ to properly handle async execution.
-        Creates a fresh event loop for each task.
+        Detects if the task's run method is a coroutine and handles it.
         """
         # Get or create event loop
         try:
@@ -82,19 +80,16 @@ class AsyncTask(Task):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         
-        try:
-            # Run the async task
-            return loop.run_until_complete(self.run_async(*args, **kwargs))
-        finally:
-            # Don't close the loop - reuse it for next task
-            pass
+        # Call the actual task function
+        result = self.run(*args, **kwargs)
+        
+        # If it's a coroutine, run it in the event loop
+        if asyncio.iscoroutine(result):
+            return loop.run_until_complete(result)
+        
+        # Otherwise, return the result directly (for sync tasks)
+        return result
     
-    async def run_async(self, *args, **kwargs):
-        """
-        Override this in subclasses instead of run().
-        This is the actual async implementation.
-        """
-        raise NotImplementedError("Subclasses must implement run_async()")
 
 
 # --- Worker Lifecycle Hooks ---
@@ -121,9 +116,13 @@ class AsyncTask(Task):
 
 @worker_process_init.connect
 def init_worker_process(**kwargs):
-
-    logger.info("Celery worker process initialized")
-
+    """
+    Initialize each worker process with a fresh event loop.
+    This runs BEFORE any tasks execute in the worker.
+    """
+    logger.info("Initializing worker process...")
+    
+    # Close any existing event loop
     try:
         loop = asyncio.get_event_loop()
         if not loop.is_closed():
@@ -142,12 +141,16 @@ def init_worker_process(**kwargs):
 
 @worker_init.connect
 def configure_celery_worker_db(sender=None, conf=None, **kwargs):
-
+    """
+    Initialize database engine for Celery worker on startup.
+    This runs once per worker (not per task).
+    """
     logger.info("Configuring Celery worker database...")
-
+    
     # For solo/threads pool, we handle this in worker_process_init
     # This is here for compatibility
     if sender and hasattr(sender, 'pool') and sender.pool.__class__.__name__ not in ['Solo', 'ThreadPool']:
+        # Only for prefork pool (which we're not using anymore)
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
@@ -159,22 +162,27 @@ def configure_celery_worker_db(sender=None, conf=None, **kwargs):
 
 @worker_shutdown.connect
 def cleanup_celery_worker_db(sender=None, conf=None, **kwargs):
-
+    """
+    Cleanup database connections on worker shutdown.
+    """
     logger.info("Cleaning up Celery worker database...")
-
+    
     try:
         loop = asyncio.get_event_loop()
         if loop and not loop.is_closed():
             loop.run_until_complete(close_celery_db())
+            # Now we can close the loop
             loop.close()
-    except RuntimeError:
-
-        logger.warning("Could not close DB in worker_shutdown - will close in tasks")
+    except RuntimeError as e:
+        logger.warning(f"Error during cleanup: {e}")
     
-    logger.info("Celery worker database cleanup complete")
+    logger.info("Worker cleanup completed")
 
 def run_async_task(coro):
-
+    """
+    Helper function to run async coroutines in Celery tasks.
+    Creates a fresh event loop if needed.
+    """
     try:
         loop = asyncio.get_event_loop()
         if loop.is_closed():

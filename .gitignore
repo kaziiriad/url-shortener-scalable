@@ -251,3 +251,5 @@ GEMINI.md
 *.pem.csr
 
 LOAD_BALANCER.md
+
+data/
