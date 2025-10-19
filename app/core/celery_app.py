@@ -37,9 +37,9 @@ celery_app.conf.update(
     # Task execution settings
     task_acks_late=True,
     task_reject_on_worker_lost=True,
-    worker_prefetch_multiplier=1,  # Important for async tasks
-
-)
+        worker_prefetch_multiplier=1,  # Important for async tasks
+        broker_heartbeat = 60,
+    )
 
 # Periodic task configuration from settings
 celery_app.conf.beat_schedule = {
