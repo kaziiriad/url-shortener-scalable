@@ -7,7 +7,8 @@ A high-performance, scalable URL shortener service built with FastAPI, featuring
 - **Fast URL Shortening**: Generate short URLs with pre-populated keys for instant response.
 - **Redis Caching**: Lightning-fast redirects with Redis-first lookup.
 - **Dual Database**: PostgreSQL for pre-populating and managing a pool of short URL keys, and MongoDB for storing the mapping between short and long URLs (MongoDB v6.0).
-- **Background Tasks**: Celery workers for key pre-population and cleanup.
+- **Robust Background Processing**: Celery workers with optimized database connections and heartbeat monitoring to ensure reliable task execution.
+- **Automated Database Initialization**: The PostgreSQL database is automatically initialized with the required schema on startup.
 - **Monitoring**: Celery Flower dashboard for task monitoring, accessible via Nginx proxy with proper static asset and API routing.
 - **Automated Testing**: Comprehensive `pytest` framework with mocking for robust unit and integration tests.
 - **Containerized**: Full Docker setup with docker-compose.
@@ -242,7 +243,7 @@ The following rate limits are in place:
 | `/[a-zA-Z0-9]{6,8}` | 100/sec | 20 | High-volume redirects |
 | `/health` | 10/sec | 5 | Health check monitoring |
 
-For more detailed information about the load balancer and rate limiter configuration, please see the `LOAD_BALANCER.md` file.
+The Nginx configuration file `nginx-lb.conf` contains the detailed configuration for the load balancer and rate limiter.
 
 ## 📋 Prerequisites
 
@@ -289,18 +290,12 @@ For more detailed information about the load balancer and rate limiter configura
     uv sync
     ```
 
-3.  **Set up environment variables**
-    ```bash
-    cp .env.example .env
-    # Edit .env with your configuration
-    ```
-
-4.  **Start external services**
+3.  **Start external services**
     ```bash
     docker-compose up -d redis postgres mongo_db
     ```
 
-5.  **Run the application**
+4.  **Run the application**
     ```bash
     uv run app.main:app --reload
     ```
@@ -328,6 +323,8 @@ Key environment variables in `.env`:
 | `TASK_RETRY_DELAY` | Delay for retrying failed tasks (in seconds) | `60` |
 | `TASK_MAX_RETRIES` | Maximum number of retries for failed tasks | `3` |
 | `CLEANUP_EXPIRED_SCHEDULE` | Schedule for cleaning up expired links (in seconds) | `86400` |
+| `CELERY_DB_POOL_SIZE` | Celery database connection pool size | `5` |
+| `CELERY_DB_MAX_OVERFLOW` | Celery database connection pool max overflow | `5` |
 
 
 ## 📚 API Usage
