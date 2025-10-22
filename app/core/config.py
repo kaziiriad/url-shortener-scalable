@@ -3,7 +3,7 @@ from typing import Optional, Any, List
 from dotenv import load_dotenv
 import os
 
-load_dotenv("../../.env")
+load_dotenv()
 
 class Settings(BaseSettings):
 
@@ -29,11 +29,11 @@ class Settings(BaseSettings):
     redis_socket_timeout: int = os.getenv("REDIS_SOCKET_TIMEOUT", 5)
     
 
-    db_name: str = os.getenv("DB_NAME", "url_shortener")
-    db_host: str = os.getenv("DB_HOST", "localhost")
-    db_port: int = os.getenv("DB_PORT", 5432)
+    db_host: str = os.getenv("DB_HOST", "localhost")  # Should be "pgbouncer"
+    db_port: int = os.getenv("DB_PORT", 6432)        # Should be 6432 (PgBouncer port)
     db_user: str = os.getenv("DB_USER", "postgres")
-    db_password: str = os.getenv("DB_PASSWORD", "")
+    db_password: str = os.getenv("DB_PASSWORD", "pgpassword")
+    db_name: str = os.getenv("DB_NAME", "url_shortener")
 
     # PostgreSQL Pool Configuration for FastAPI
     db_pool_size: int = os.getenv("DB_POOL_SIZE", 10) # Connections per FastAPI instance

@@ -55,18 +55,12 @@ services:
       # Instance Identification
       - INSTANCE_ID=${HOSTNAME:-unknown}
       
-      # Database Connections
-      - DB_HOST=postgres
-      - DB_PORT=5432
+      # Database Connections (via PgBouncer)
+      - DB_HOST=pgbouncer
+      - DB_PORT=6432
       - DB_USER=postgres
       - DB_PASSWORD=pgpassword
       - DB_NAME=url_shortener
-      
-      # PostgreSQL Connection Pool (FastAPI)
-      - DB_POOL_SIZE=10
-      - DB_MAX_OVERFLOW=20
-      - DB_POOL_TIMEOUT=30
-      - DB_POOL_RECYCLE=3600
       
       # MongoDB Config
       - MONGO_URI=mongodb://mongo_db:27017
@@ -132,7 +126,7 @@ services:
         condition: service_healthy
       mongo_db:
         condition: service_healthy
-      postgres:
+      pgbouncer:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -219,6 +213,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./pg_hba.conf:/etc/postgresql/15/main/pg_hba.conf:ro
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=pgpassword
@@ -237,6 +232,7 @@ services:
     # Calculated for: 3 FastAPI (30 conns each) + 1 Celery (10 conns) + 20% buffer
     command: >
       postgres
+      -c listen_addresses='*'
       -c max_connections=200
       -c shared_buffers=256MB
       -c effective_cache_size=1GB
@@ -253,6 +249,33 @@ services:
     labels:
       com.url-shortener.service: "relational-db"
       com.url-shortener.description: "PostgreSQL for key management"
+
+  # ============================================
+  # DATABASE CONNECTION POOLER (PgBouncer)
+  # ============================================
+  pgbouncer:
+    image: edoburu/pgbouncer
+    container_name: url_shortener_pgbouncer
+    ports:
+      - "6432:6432"
+    volumes:
+      - ./pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    networks:
+      - url_shortener_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 6432 -U postgres"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      com.url-shortener.service: "db-pooler"
+      com.url-shortener.description: "PgBouncer for PostgreSQL connection pooling"
 
   # ============================================
   # BACKGROUND WORKERS (Celery Worker)
@@ -277,16 +300,14 @@ services:
     volumes:
       - .:/app
     environment:
-      # Database Connections
-      - DB_HOST=postgres
-      - DB_PORT=5432
+      # Database Connections (via PgBouncer)
+      - DB_HOST=pgbouncer
+      - DB_PORT=6432
       - DB_USER=postgres
       - DB_PASSWORD=pgpassword
       - DB_NAME=url_shortener
       
-      # Celery-specific Connection Pool (Optimized for solo pool)
-      - CELERY_DB_POOL_SIZE=5
-      - CELERY_DB_MAX_OVERFLOW=5
+      # Celery-specific settings
       - CELERY_CONCURRENCY=1
       
       # MongoDB
@@ -331,7 +352,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      postgres:
+      pgbouncer:
         condition: service_healthy
       mongo_db:
         condition: service_healthy
@@ -372,9 +393,9 @@ services:
       - .:/app
       - celery_beat_data:/tmp
     environment:
-      # Database Connections
-      - DB_HOST=postgres
-      - DB_PORT=5432
+      # Database Connections (via PgBouncer)
+      - DB_HOST=pgbouncer
+      - DB_PORT=6432
       - DB_USER=postgres
       - DB_PASSWORD=pgpassword
       - DB_NAME=url_shortener
@@ -401,7 +422,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      postgres:
+      pgbouncer:
         condition: service_healthy
     restart: unless-stopped
     labels:

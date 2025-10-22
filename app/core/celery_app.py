@@ -3,7 +3,6 @@ import logging
 from celery import Celery, Task
 from celery.signals import worker_init, worker_shutdown, worker_process_init
 from app.core.config import settings
-from app.db.sql.connection import init_celery_db, close_celery_db # Import new functions
 
 logger = logging.getLogger(__name__)
 
@@ -93,27 +92,6 @@ class AsyncTask(Task):
 
 
 # --- Worker Lifecycle Hooks ---
-# @worker_init.connect
-# def configure_celery_worker_db(sender=None, conf=None, **kwargs):
-#     """Initialize database engine for Celery worker on startup."""
-#     import asyncio
-#     # Celery worker_init runs in a separate thread/process, so we need to manage event loop
-#     loop = asyncio.get_event_loop()
-#     if loop.is_running():
-#         loop.create_task(init_celery_db())
-#     else:
-#         loop.run_until_complete(init_celery_db())
-
-# @worker_shutdown.connect
-# def cleanup_celery_worker_db(sender=None, conf=None, **kwargs):
-#     """Dispose of database engine for Celery worker on shutdown."""
-#     import asyncio
-#     loop = asyncio.get_event_loop()
-#     if loop.is_running():
-#         loop.create_task(close_celery_db())
-#     else:
-#         loop.run_until_complete(close_celery_db())
-
 @worker_process_init.connect
 def init_worker_process(**kwargs):
     """
@@ -134,9 +112,6 @@ def init_worker_process(**kwargs):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
-    # Initialize database connections
-    loop.run_until_complete(init_celery_db())
-    
     logger.info("Worker process initialized with fresh event loop")
 
 @worker_init.connect
@@ -147,19 +122,6 @@ def configure_celery_worker_db(sender=None, conf=None, **kwargs):
     """
     logger.info("Configuring Celery worker database...")
     
-    # For solo/threads pool, we handle this in worker_process_init
-    # This is here for compatibility
-    if sender and hasattr(sender, 'pool') and sender.pool.__class__.__name__ not in ['Solo', 'ThreadPool']:
-        # Only for prefork pool (which we're not using anymore)
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(init_celery_db())
-            else:
-                loop.run_until_complete(init_celery_db())
-        except RuntimeError:
-            logger.warning("Could not initialize DB in worker_init - will initialize in tasks")
-
 @worker_shutdown.connect
 def cleanup_celery_worker_db(sender=None, conf=None, **kwargs):
     """
@@ -170,7 +132,6 @@ def cleanup_celery_worker_db(sender=None, conf=None, **kwargs):
     try:
         loop = asyncio.get_event_loop()
         if loop and not loop.is_closed():
-            loop.run_until_complete(close_celery_db())
             # Now we can close the loop
             loop.close()
     except RuntimeError as e:

@@ -18,12 +18,7 @@ engine = create_async_engine(
     DB_URL_ASYNC,
     future=True,
     echo=False,
-    pool_size=10,  # Base pool size per FastAPI instance
-    max_overflow=20,  # Additional connections under load
-    pool_pre_ping=True,  # Verify connections before use (prevents stale connections)
-    pool_recycle=3600,  # Recycle connections after 1 hour (prevents timeout issues)
-    pool_timeout=30,  # Wait max 30s for connection from pool
-    echo_pool=False,  # Set to True for debugging connection pool
+    poolclass=NullPool,  # Use NullPool when using PgBouncer
     connect_args={
         "server_settings": {
             "application_name": f"url_shortener_fastapi_{settings.instance_id or 'default'}",
@@ -83,12 +78,7 @@ async def init_celery_db():
             DB_URL_ASYNC,
             future=True,
             echo=False,
-            pool_size=celery_pool_size,
-            max_overflow=celery_max_overflow,
-            pool_pre_ping=True,  # Verify connections (important for long-running workers)
-            pool_recycle=1800,  # Recycle after 30 mins (workers run longer)
-            pool_timeout=30,
-            echo_pool=False,
+            poolclass=NullPool,  # Use NullPool when using PgBouncer
             connect_args={
                 "server_settings": {
                     "application_name": "url_shortener_celery_worker",

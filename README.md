@@ -6,6 +6,7 @@ A high-performance, scalable URL shortener service built with FastAPI, featuring
 
 - **Fast URL Shortening**: Generate short URLs with pre-populated keys for instant response.
 - **Redis Caching**: Lightning-fast redirects with Redis-first lookup.
+- **Efficient Connection Pooling**: Uses PgBouncer to manage PostgreSQL connections efficiently, reducing overhead and improving performance.
 - **Dual Database**: PostgreSQL for pre-populating and managing a pool of short URL keys, and MongoDB for storing the mapping between short and long URLs (MongoDB v6.0).
 - **Robust Background Processing**: Celery workers with optimized database connections and heartbeat monitoring to ensure reliable task execution.
 - **Automated Database Initialization**: The PostgreSQL database is automatically initialized with the required schema on startup.
@@ -44,6 +45,7 @@ graph TD
 
     subgraph "Data Tier"
         B[Redis<br/>Cache & Message Broker<br/>Port 6379]
+        P[PgBouncer<br/>Connection Pooler<br/>Port 6432]
         C[PostgreSQL<br/>Key Management<br/>Port 5432]
         D[MongoDB<br/>URL Storage<br/>Port 27017]
     end
@@ -55,13 +57,14 @@ graph TD
 
     %% Application Data Access
     A -->|Cache Lookup| B
-    A -->|Key Management| C
+    A -->|DB Connection| P
+    P -->|Pooled Connection| C
     A -->|URL Storage| D
 
     %% Background Processing Flow
     F -->|Schedule Tasks| E
     E -->|Message Queue| B
-    E -->|Key Operations| C
+    E -->|DB Connection| P
     E -->|URL Operations| D
     G -->|Monitor| E
 
@@ -75,7 +78,7 @@ graph TD
     class H loadTier
     class A appTier
     class F,E,G processTier
-    class B,C,D dataTier
+    class B,C,D,P dataTier
 ```
 
 ### AWS Architecture
@@ -311,8 +314,8 @@ Key environment variables in `.env`:
 | `REDIS_PORT` | Redis port | `6379` |
 | `REDIS_PASSWORD` | Redis password | ` ` |
 | `DB_NAME` | PostgreSQL database name | `url_shortener` |
-| `DB_HOST` | PostgreSQL host | `localhost` |
-| `DB_PORT` | PostgreSQL port | `5432` |
+| `DB_HOST` | PostgreSQL host | `pgbouncer` |
+| `DB_PORT` | PostgreSQL port | `6432` |
 | `DB_USER` | PostgreSQL user | `postgres` |
 | `DB_PASSWORD` | PostgreSQL password | ` ` |
 | `HOST` | Application host | `localhost` |
@@ -372,6 +375,7 @@ curl "http://localhost:8000/health"
 |---|---|---|
 | **web_app** | 8000 | Main FastAPI application |
 | **redis** | 6379 | Cache for fast URL lookups |
+| **pgbouncer** | 6432 | PostgreSQL connection pooler |
 | **postgres** | 5432 | Primary database for URL key management |
 | **mongo_db** | 27017 | Database for URL storage and analytics (MongoDB v6.0) |
 | **celery_worker** | - | Background task processor |

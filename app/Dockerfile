@@ -14,7 +14,7 @@ WORKDIR /app
 
 # Copy project files first (excluding .venv via .dockerignore)
 COPY pyproject.toml .
-COPY .env .
+# COPY .env .
 COPY app/ .
 
 # Create a non-root user and change ownership
