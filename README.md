@@ -7,6 +7,8 @@ A high-performance, scalable URL shortener service built with FastAPI, featuring
 - **Fast URL Shortening**: Generate short URLs with pre-populated keys for instant response.
 - **Redis Caching**: Lightning-fast redirects with Redis-first lookup.
 - **Efficient Connection Pooling**: Uses PgBouncer to manage PostgreSQL connections efficiently, reducing overhead and improving performance.
+- **Repository Pattern**: A clean and maintainable data access layer using the repository pattern.
+- **Efficient Key Pre-population**: A highly efficient key pre-population mechanism that uses a raw SQL query with `unnest` to bulk-insert keys.
 - **Dual Database**: PostgreSQL for pre-populating and managing a pool of short URL keys, and MongoDB for storing the mapping between short and long URLs (MongoDB v6.0).
 - **Robust Background Processing**: Celery workers with optimized database connections and heartbeat monitoring to ensure reliable task execution.
 - **Automated Database Initialization**: The PostgreSQL database is automatically initialized with the required schema on startup.
@@ -322,6 +324,7 @@ Key environment variables in `.env`:
 | `PORT` | Application port | `8000` |
 | `BASE_URL` | Base URL for short links | `http://localhost:8000` |
 | `KEY_POPULATION_COUNT` | Number of keys to pre-populate | `10` |
+| `KEY_BATCH_SIZE` | The batch size for pre-populating keys | `100` |
 | `KEY_POPULATION_SCHEDULE` | Schedule for key pre-population (in seconds) | `1800` |
 | `TASK_RETRY_DELAY` | Delay for retrying failed tasks (in seconds) | `60` |
 | `TASK_MAX_RETRIES` | Maximum number of retries for failed tasks | `3` |
@@ -337,7 +340,8 @@ Key environment variables in `.env`:
 ```bash
 curl -X POST "http://localhost:8000/api/v1/create" \
   -H "Content-Type: application/json" \
-  -d {
+  -d 
+  {
     "long_url": "https://www.example.com",
     "expires_at": "2025-12-31T23:59:59"
   }
