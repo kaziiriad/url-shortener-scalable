@@ -13,7 +13,7 @@ import time
 import logging
 
 logger = logging.getLogger(__name__)
-monitoring_router = APIRouter(prefix="/monitoring", tags=["Monitoring"])
+monitoring_router = APIRouter(prefix='/monitoring', tags=["Monitoring"])
 
 @monitoring_router.get("/health/detailed")
 async def detailed_health_check(db: AsyncSession = Depends(get_db_async)):
@@ -31,6 +31,8 @@ async def detailed_health_check(db: AsyncSession = Depends(get_db_async)):
     # PostgreSQL health check
     try:
         result = await db.execute(text("SELECT 1"))
+        if result.scalar() != 1:
+            raise Exception("Unexpected response from PostgreSQL")
         health_status["checks"]["postgresql"] = {
             "status": "healthy",
             "response_time_ms": round((time.time() - start_time) * 1000, 2)
@@ -96,6 +98,22 @@ async def detailed_health_check(db: AsyncSession = Depends(get_db_async)):
             "error": str(e)
         }
     
+    try:
+        total_keys = await URLKeyRepository.get_total_key_count(db)
+        health_status["checks"]["total_keys"] = {
+            "total_keys": total_keys
+        }
+        if total_keys < 100000:
+            health_status["status"] = "degraded"
+            health_status["checks"]["total_keys"]["status"] = "critical"
+        
+    except Exception as e:
+        logger.error(f"Total key count check failed: {e}")
+        health_status["checks"]["total_keys"] = {
+            "status": "unknown",
+            "error": str(e)
+        }
+
     health_status["total_response_time_ms"] = round((time.time() - start_time) * 1000, 2)
     return health_status
 

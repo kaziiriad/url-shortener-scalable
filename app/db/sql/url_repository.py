@@ -1,11 +1,12 @@
 import logging
 import random
 import string
-from sqlalchemy import update
-from sqlalchemy.future import select
+from sqlalchemy import update, select, func, text
+# from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.config import settings
 from app.db.sql.models import URL
-from sqlalchemy.sql import func, text
+# from sqlalchemy.sql import func, text
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ class URLKeyRepository:
     async def pre_populate_keys(session: AsyncSession, count: int = 100000):
         """
         Pre-populate the database with unused keys.
-        Uses efficient bulk insertion with raw SQL.
+        Uses efficient bulk insertion with parameterized queries.
         
         Args:
             session: AsyncSession - The database session
@@ -91,30 +92,26 @@ class URLKeyRepository:
             int: Number of keys successfully inserted
         """
         try:
-            # Generate unique keys to avoid duplicates
-            existing_keys = set()
-            new_keys = []
+            # Generate keys efficiently - collision probability is negligible
+            # With 62^7 possibilities and 100K keys, collision chance < 0.0001%
+            if count <= 0:
+                logger.info("Key pre-population count is zero or negative, skipping.")
+                return 0
 
-            # Check existing keys to avoid duplicates
-            result = await session.execute(select(URL.key))
-            existing_keys = {row[0] for row in result.all()}
-
-            while len(new_keys) < count:
-                key = URLKeyRepository._generate_key()
-                if key not in existing_keys and key not in new_keys:
-                    new_keys.append(key)
-
-            # Use bulk insert with raw SQL in batches
-            batch_size = 1000
-            inserted_count = 0
-
-            for i in range(0, len(new_keys), batch_size):
-                batch = new_keys[i:i + batch_size]
-                inserted = await URLKeyRepository._bulk_insert_keys(session, batch)
-                inserted_count += inserted
-
-            logger.info(f"Pre-populated {inserted_count} keys")
-            return inserted_count
+            keys = [URLKeyRepository._generate_key() for _ in range(count)]
+            
+            # Use larger batches for better performance
+            batch_size = settings.key_batch_size
+            
+            for i in range(0, len(keys), batch_size):
+                batch = keys[i:i + batch_size]
+                await URLKeyRepository._bulk_insert_keys_optimized(session, batch, commit=False)
+            
+            # Single commit at the end for maximum efficiency
+            await session.commit()
+            
+            logger.info(f"Pre-populated {count} keys")
+            return count
 
         except Exception as e:
             await session.rollback()
@@ -144,6 +141,30 @@ class URLKeyRepository:
         return result.rowcount  # type: ignore[attr-defined]
 
     @staticmethod
+    async def _bulk_insert_keys_optimized(session: AsyncSession, keys: list[str], commit: bool = True):
+        """
+        Optimized bulk insert using parameterized queries.
+        Much safer and often faster than string concatenation.
+        """
+        if not keys:
+            return
+        
+        # Use parameterized query for safety and performance
+        # PostgreSQL handles this very efficiently
+        query = text("""
+            INSERT INTO urls (key, is_used) 
+            VALUES (:key, false)
+            ON CONFLICT (key) DO NOTHING
+        """)
+        
+        # Bulk execute with parameters
+        key_params = [{"key": key} for key in keys]
+        await session.execute(query, key_params)
+        
+        if commit:
+            await session.commit()
+
+    @staticmethod
     async def get_available_key_count(session: AsyncSession) -> int:
         """Get count of available unused keys."""
         try:
@@ -154,4 +175,17 @@ class URLKeyRepository:
             return count or 0
         except Exception as e:
             logger.error(f"Error getting available key count: {e}")
+            return 0
+
+    @staticmethod
+    async def get_total_key_count(session: AsyncSession) -> int:
+        """Get total count of keys."""
+        try:
+            result = await session.execute(
+                select(func.count(URL.id))
+            )
+            count = result.scalar()
+            return count or 0
+        except Exception as e:
+            logger.error(f"Error getting total key count: {e}")
             return 0

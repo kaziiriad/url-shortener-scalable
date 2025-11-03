@@ -38,7 +38,7 @@ app = FastAPI(
 
 # Include API routes with prefix
 app.include_router(url_router, prefix="/api/v1", tags=["API"])
-app.include_router(monitoring_router, prefix="/monitoring", tags=["Monitoring"])
+app.include_router(monitoring_router)
 
 @app.get("/")
 async def root():

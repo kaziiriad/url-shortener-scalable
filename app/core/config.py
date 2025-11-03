@@ -9,47 +9,47 @@ class Settings(BaseSettings):
 
     # Application
     host: str = os.getenv("HOST", "localhost")
-    port: int = os.getenv("PORT", 8000)
-    base_url: str = os.getenv("BASE_URL", f"http://{host}:{port}")
-    testing: bool = os.getenv("TESTING", False)
+    port: int = int(os.getenv("PORT", "8000"))
+    testing: bool = bool(os.getenv("TESTING", "False").lower() in ("true", "1", "yes"))
     instance_id: Optional[str] = os.getenv("INSTANCE_ID", None)
+    
+    # Computed field - build base_url after host and port are set
+    @property
+    def base_url(self) -> str:
+        return os.getenv("BASE_URL", f"http://{self.host}:{self.port}")
 
     mongo_uri: str = os.getenv("MONGO_URI", "mongodb://localhost:27017")
     mongo_db_name: str = os.getenv("MONGO_DB_NAME", "url_shortener")
-    mongo_max_pool_size: int = os.getenv("MONGO_MAX_POOL_SIZE", 50)
-    mongo_min_pool_size: int = os.getenv("MONGO_MIN_POOL_SIZE", 10)
-    mongo_max_idle_time_ms: int = os.getenv("MONGO_MAX_IDLE_TIME_MS", 45000)
+    mongo_max_pool_size: int = int(os.getenv("MONGO_MAX_POOL_SIZE", "50"))
+    mongo_min_pool_size: int = int(os.getenv("MONGO_MIN_POOL_SIZE", "10"))
+    mongo_max_idle_time_ms: int = int(os.getenv("MONGO_MAX_IDLE_TIME_MS", "45000"))
     
     
     redis_host: str = os.getenv("REDIS_HOST", "localhost")
-    redis_port: int = os.getenv("REDIS_PORT", 6379)
+    redis_port: int = int(os.getenv("REDIS_PORT", "6379"))
     redis_password: str = os.getenv("REDIS_PASSWORD", "")
-    redis_max_connections: int = os.getenv("REDIS_MAX_CONNECTIONS", 10) # Connection pool size for Redis
-    redis_socket_keepalive: bool = os.getenv("REDIS_SOCKET_KEEPALIVE", True)
-    redis_socket_timeout: int = os.getenv("REDIS_SOCKET_TIMEOUT", 5)
+    redis_max_connections: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "10")) # Connection pool size for Redis
+    redis_socket_keepalive: bool = bool(os.getenv("REDIS_SOCKET_KEEPALIVE", "True").lower() in ("true", "1", "yes"))
+    redis_socket_timeout: int = int(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
     
 
     db_host: str = os.getenv("DB_HOST", "localhost")  # Should be "pgbouncer"
-    db_port: int = os.getenv("DB_PORT", 6432)        # Should be 6432 (PgBouncer port)
+    db_port: int = int(os.getenv("DB_PORT", "6432"))        # Should be 6432 (PgBouncer port)
     db_user: str = os.getenv("DB_USER", "postgres")
     db_password: str = os.getenv("DB_PASSWORD", "pgpassword")
     db_name: str = os.getenv("DB_NAME", "url_shortener")
 
     # PostgreSQL Pool Configuration for FastAPI
-    db_pool_size: int = os.getenv("DB_POOL_SIZE", 10) # Connections per FastAPI instance
-    db_max_overflow: int = os.getenv("DB_MAX_OVERFLOW", 20) # Additional connections under load
-    db_pool_timeout: int = os.getenv("DB_POOL_TIMEOUT", 30) # Wait time for connection from pool
-    db_pool_recycle: int = os.getenv("DB_POOL_RECYCLE", 3600) # Recycle connections after 1 hour
-
-
-    host: str = os.getenv("HOST", "localhost")
-    port: int = os.getenv("PORT", 8000)
-    base_url: str = os.getenv("BASE_URL", f"http://{host}:{port}")
+    db_pool_size: int = int(os.getenv("DB_POOL_SIZE", "10")) # Connections per FastAPI instance
+    db_max_overflow: int = int(os.getenv("DB_MAX_OVERFLOW", "20")) # Additional connections under load
+    db_pool_timeout: int = int(os.getenv("DB_POOL_TIMEOUT", "30")) # Wait time for connection from pool
+    db_pool_recycle: int = int(os.getenv("DB_POOL_RECYCLE", "3600")) # Recycle connections after 1 hour
 
     # Key management
     key_population_count: int = int(os.getenv("KEY_POPULATION_COUNT", "10"))
+    key_batch_size: int = int(os.getenv("KEY_BATCH_SIZE", "100"))
     key_population_schedule: int = int(os.getenv("KEY_POPULATION_SCHEDULE", "1800"))  # seconds
-    key_minimum_threshold: int = os.getenv("KEY_MINIMUM_THRESHOLD", "1000") # Alert if below this
+    key_minimum_threshold: int = int(os.getenv("KEY_MINIMUM_THRESHOLD", "1000")) # Alert if below this
 
     # Celery task configuration
     task_retry_delay: int = int(os.getenv("TASK_RETRY_DELAY", "60"))  # seconds
@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     celery_concurrency: int = int(os.getenv("CELERY_CONCURRENCY", "4"))
 
     # Rate Limiting
-    rate_limit_enabled: bool = os.getenv("RATE_LIMIT_ENABLED", True)
+    rate_limit_enabled: bool = bool(os.getenv("RATE_LIMIT_ENABLED", "True").lower() in ("true", "1", "yes"))
     create_url_rate_limit: str = os.getenv("CREATE_URL_RATE_LIMIT", "10/minute")
     redirect_rate_limit: str = os.getenv("REDIRECT_RATE_LIMIT", "10/minute")
 

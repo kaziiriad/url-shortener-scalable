@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
     retry_backoff=True,
     retry_jitter=True,
 )
-async def pre_populate_keys(self, count: int = 0):
+async def pre_populate_keys(self, count: int = None):
     """Pre-populate database with unused short URL keys."""
     if count is None:
         count = settings.key_population_count
