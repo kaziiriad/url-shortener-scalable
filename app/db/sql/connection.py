@@ -130,13 +130,22 @@ async def get_pool_status(engine_name: str = "fastapi"):
             return {"error": f"{engine_name} engine not initialized"}
         
         pool = target_engine.pool
+
+        if isinstance(pool, NullPool):
+            return {
+                "engine": engine_name,
+                "pool_class": "NullPool",
+                "message": "Connection pooling is managed by an external proxy (e.g., PgBouncer). In-app pool metrics are not applicable."
+            }
+
         return {
             "engine": engine_name,
+            "pool_class": pool.__class__.__name__,
             "pool_size": pool.size(),
             "checked_in": pool.checkedin(),
             "checked_out": pool.checkedout(),
             "overflow": pool.overflow(),
-            "total": pool.size() + pool.overflow(),
+            "total_connections": pool.size() + pool.overflow(),
         }
     except Exception as e:
         logger.error(f"Error getting pool status: {e}")

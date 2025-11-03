@@ -3,6 +3,7 @@ import logging
 from app.core.celery_app import celery_app, AsyncTask
 from app.db.sql.connection import get_celery_db_session
 from app.db.sql.models import URL
+from app.db.sql.url_repository import URLKeyRepository
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ logger = logging.getLogger(__name__)
     retry_backoff=True,
     retry_jitter=True,
 )
-async def pre_populate_keys(self, count: int = None):
+async def pre_populate_keys(self, count: int = 0):
     """Pre-populate database with unused short URL keys."""
     if count is None:
         count = settings.key_population_count
@@ -65,7 +66,7 @@ async def pre_populate_keys(self, count: int = None):
 
     try:
         async for session in get_celery_db_session():
-            inserted_count = await URL.pre_populate_keys(session, count)
+            inserted_count = await URLKeyRepository.pre_populate_keys(session, count)
 
             logger.info(f"Inserted {inserted_count} keys into the database")
 

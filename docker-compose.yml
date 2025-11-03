@@ -258,6 +258,19 @@ services:
     container_name: url_shortener_pgbouncer
     ports:
       - "6432:6432"
+    environment:
+      # PostgreSQL connection details
+      - DATABASE_URL=postgres://postgres:pgpassword@postgres:5432/url_shortener
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=200
+      - DEFAULT_POOL_SIZE=25
+      - RESERVE_POOL_SIZE=5
+      - SERVER_LIFETIME=3600
+      - SERVER_IDLE_TIMEOUT=600
+      # Authentication
+      - AUTH_TYPE=md5
+      - AUTH_FILE=/etc/pgbouncer/userlist.txt
+
     volumes:
       - ./pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
       - ./userlist.txt:/etc/pgbouncer/userlist.txt:ro

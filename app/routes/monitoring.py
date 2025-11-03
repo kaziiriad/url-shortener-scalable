@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.sql.connection import get_db_async, get_pool_status, engine
 from app.db.nosql.connection import check_mongo_health, MongoDBConnection
 from app.db.sql.models import URL
+from app.db.sql.url_repository import URLKeyRepository
 from app.core.redis_client import RedisClient
 import time
 import logging
@@ -79,7 +80,7 @@ async def detailed_health_check(db: AsyncSession = Depends(get_db_async)):
     
     # Check available keys
     try:
-        available_keys = await URL.get_available_key_count(db)
+        available_keys = await URLKeyRepository.get_available_key_count(db)
         health_status["checks"]["key_pool"] = {
             "status": "healthy" if available_keys > 1000 else "warning",
             "available_keys": available_keys,
@@ -130,7 +131,9 @@ async def get_connection_pool_status():
 
 @monitoring_router.get("/mongodb/stats")
 async def get_mongodb_stats():
-    """Get MongoDB connection pool and database statistics."""
+    """
+    Get MongoDB connection pool and database statistics.
+    """
     try:
         pool_stats = MongoDBConnection.get_pool_stats()
         

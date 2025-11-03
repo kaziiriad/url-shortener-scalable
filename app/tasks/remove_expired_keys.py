@@ -90,7 +90,7 @@ async def _async_cleanup_expired_keys():
                 ).values(is_used=False)
                 
                 result = await session.execute(stmt)
-                keys_reset = result.rowcount
+                keys_reset = result.rowcount  # type: ignore[attr-defined]
                 await session.commit()
                 
                 logger.info(f"Reset {keys_reset} keys to unused status in PostgreSQL")

@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from app.db.nosql.connection import get_db
 from app.models.schemas import URL, URLCreate, URLDelete
 from app.db.sql.models import URL as URLModel
+from app.db.sql.url_repository import URLKeyRepository
 from fastapi import HTTPException
 import logging
 import json
@@ -20,7 +21,7 @@ class URLService:
         """
         Retrieves an unused key from PostgreSQL, protected by a retry and circuit breaker.
         """
-        return await URLModel.get_unused_key(session)
+        return await URLKeyRepository.get_unused_key(session)
 
     @staticmethod
     @with_retry(max_retries=3, delay=0.5)
@@ -29,7 +30,7 @@ class URLService:
         """
         Populates keys in PostgreSQL, protected by a retry and circuit breaker.
         """
-        await URLModel.pre_populate_keys(session, count)
+        await URLKeyRepository.pre_populate_keys(session, count)
 
     @staticmethod
     @with_retry(max_retries=3, delay=0.5)
@@ -125,7 +126,7 @@ class URLService:
 
         except Exception as e:
             logger.error(f"Error getting URL: {e}")
-            raise HTTPException(status_code=500, detail=f"An unexpected error occurred while retrieving the URL.")
+            raise HTTPException(status_code=500, detail="An unexpected error occurred while retrieving the URL.")
 
     @classmethod
     async def delete_url(cls, mongo_db, url_data: URLDelete):
