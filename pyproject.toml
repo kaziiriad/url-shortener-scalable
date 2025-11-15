@@ -44,5 +44,5 @@ test = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["app*"]
+include = ["create_service*", "common*"]
 exclude = ["tests*"]

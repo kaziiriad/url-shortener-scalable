@@ -1,0 +1,454 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # LOAD BALANCER & REVERSE PROXY
+  # ============================================
+  nginx_lb:
+    image: nginx:alpine
+    container_name: url_shortener_nginx_lb
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-decoupled.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx_cache:/var/cache/nginx
+      - nginx_logs:/var/log/nginx
+    networks:
+      - url_shortener_network
+    depends_on:
+      - create_service
+      - redirect_service
+      - celery_flower
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      - NGINX_WORKER_PROCESSES=auto
+      - NGINX_WORKER_CONNECTIONS=1024
+    labels:
+      com.url-shortener.service: "load-balancer"
+      com.url-shortener.description: "Nginx load balancer and API gateway"
+
+  # ============================================
+  # APPLICATION LAYER (FastAPI)
+  # ============================================
+  create_service:
+    build:
+      context: .
+      dockerfile: ./create_service/Dockerfile
+    expose:
+      - "8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      # Application Config
+      - HOST=0.0.0.0
+      - PORT=8000
+      - BASE_URL=http://localhost
+      - TESTING=false
+      
+      # Database Connections (via PgBouncer)
+      - DB_HOST=pgbouncer
+      - DB_PORT=6432
+      - DB_USER=postgres
+      - DB_PASSWORD=pgpassword
+      - DB_NAME=url_shortener
+      
+      # MongoDB Config
+      - MONGO_URI=mongodb://mongo_db:27017
+      - MONGO_DB_NAME=url_shortener
+      
+      # Redis Config
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      
+      # Circuit Breaker & Retry Config
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+      - CIRCUIT_BREAKER_TIMEOUT=60
+      - DB_RETRY_ATTEMPTS=3
+      - DB_RETRY_DELAY=1.0
+      - DB_RETRY_BACKOFF=2.0
+    networks:
+      - url_shortener_network
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongo_db:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: curl --fail http://localhost:8000/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      com.url-shortener.service: "create"
+      com.url-shortener.description: "FastAPI create URL service"
+
+  redirect_service:
+    build:
+      context: .
+      dockerfile: ./redirect_service/Dockerfile
+    ports:
+      - "8001:8001"
+    expose:
+      - "8001"
+    volumes:
+      - .:/app
+    environment:
+      # Application Config
+      - HOST=0.0.0.0
+      - PORT=8001
+      - BASE_URL=http://localhost
+      - TESTING=false
+      
+      # MongoDB Config
+      - MONGO_URI=mongodb://mongo_db:27017
+      - MONGO_DB_NAME=url_shortener
+      
+      # Redis Config
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      
+      # Circuit Breaker & Retry Config
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+      - CIRCUIT_BREAKER_TIMEOUT=60
+      - DB_RETRY_ATTEMPTS=3
+      - DB_RETRY_DELAY=1.0
+      - DB_RETRY_BACKOFF=2.0
+    networks:
+      - url_shortener_network
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongo_db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: curl --fail http://localhost:8001/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      com.url-shortener.service: "redirect"
+      com.url-shortener.description: "FastAPI redirect service"
+
+  # ============================================
+  # CACHE LAYER (Redis)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: url_shortener_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - url_shortener_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+      --appendonly yes
+      --tcp-keepalive 60
+      --timeout 300
+    labels:
+      com.url-shortener.service: "cache"
+      com.url-shortener.description: "Redis cache and message broker"
+
+  # ============================================
+  # DOCUMENT DATABASE (MongoDB)
+  # ============================================
+  mongo_db:
+    image: mongo:6.0
+    container_name: url_shortener_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - mongo_config:/data/configdb
+    networks:
+      - url_shortener_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    environment:
+      - MONGO_INITDB_DATABASE=url_shortener
+    command: >
+      mongod
+      --wiredTigerCacheSizeGB 0.5
+      --maxConns 200
+    labels:
+      com.url-shortener.service: "document-db"
+      com.url-shortener.description: "MongoDB for URL storage"
+
+  # ============================================
+  # RELATIONAL DATABASE (PostgreSQL)
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: url_shortener_postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./pg_hba.conf:/etc/postgresql/15/main/pg_hba.conf:ro
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=pgpassword
+      - POSTGRES_DB=url_shortener
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --lc-collate=C --lc-ctype=C
+    networks:
+      - url_shortener_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    command: >
+      postgres
+      -c listen_addresses='*'
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c wal_buffers=16MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c checkpoint_completion_target=0.9
+      -c max_wal_senders=3
+      -c wal_level=replica
+    labels:
+      com.url-shortener.service: "relational-db"
+      com.url-shortener.description: "PostgreSQL for key management"
+
+  # ============================================
+  # DATABASE CONNECTION POOLER (PgBouncer)
+  # ============================================
+  pgbouncer:
+    image: edoburu/pgbouncer
+    container_name: url_shortener_pgbouncer
+    ports:
+      - "6432:6432"
+    environment:
+      - DATABASE_URL=postgres://postgres:pgpassword@postgres:5432/url_shortener
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=200
+      - DEFAULT_POOL_SIZE=25
+      - RESERVE_POOL_SIZE=5
+      - SERVER_LIFETIME=3600
+      - SERVER_IDLE_TIMEOUT=600
+      - AUTH_TYPE=md5
+      - AUTH_FILE=/etc/pgbouncer/userlist.txt
+    volumes:
+      - ./pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    networks:
+      - url_shortener_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 6432 -U postgres"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      com.url-shortener.service: "db-pooler"
+      com.url-shortener.description: "PgBouncer for PostgreSQL connection pooling"
+
+  # ============================================
+  # BACKGROUND WORKERS (Celery Worker)
+  # ============================================
+  celery_worker:
+    build:
+      context: .
+      dockerfile: ./worker_service/Dockerfile
+    container_name: url_shortener_celery_worker
+    command: >
+      uv run celery -A worker_service.celery_app:celery_app worker
+      --pool=solo
+      --loglevel=info
+      --hostname=worker1@%h
+      --queues=db_tasks,celery
+    volumes:
+      - .:/app
+    environment:
+      # Database Connections (via PgBouncer)
+      - DB_HOST=pgbouncer
+      - DB_PORT=6432
+      - DB_USER=postgres
+      - DB_PASSWORD=pgpassword
+      - DB_NAME=url_shortener
+      
+      # MongoDB
+      - MONGO_URI=mongodb://mongo_db:27017
+      - MONGO_DB_NAME=url_shortener
+      
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      
+      # Key Management
+      - KEY_POPULATION_COUNT=50
+      - KEY_POPULATION_SCHEDULE=300
+      
+      # Circuit Breaker
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+      - CIRCUIT_BREAKER_TIMEOUT=60
+    networks:
+      - url_shortener_network
+    depends_on:
+      redis:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+      mongo_db:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      com.url-shortener.service: "background-worker"
+      com.url-shortener.description: "Celery worker for async tasks"
+
+  # ============================================
+  # TASK SCHEDULER (Celery Beat)
+  # ============================================
+  celery_beat:
+    build:
+      context: .
+      dockerfile: ./worker_service/Dockerfile
+    container_name: url_shortener_celery_beat
+    command: >
+      uv run celery -A worker_service.celery_app:celery_app beat
+      --loglevel=info
+      --schedule=/tmp/celerybeat-schedule
+      --pidfile=/tmp/celerybeat.pid
+    volumes:
+      - .:/app
+      - celery_beat_data:/tmp
+    environment:
+      # Database Connections (via PgBouncer)
+      - DB_HOST=pgbouncer
+      - DB_PORT=6432
+      - DB_USER=postgres
+      - DB_PASSWORD=pgpassword
+      - DB_NAME=url_shortener
+      
+      # MongoDB
+      - MONGO_URI=mongodb://mongo_db:27017
+      - MONGO_DB_NAME=url_shortener
+      
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      
+      # Scheduling Config
+      - KEY_POPULATION_SCHEDULE=300
+      - CLEANUP_EXPIRED_SCHEDULE=86400
+    networks:
+      - url_shortener_network
+    depends_on:
+      redis:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      com.url-shortener.service: "scheduler"
+      com.url-shortener.description: "Celery beat task scheduler"
+
+  # ============================================
+  # MONITORING DASHBOARD (Celery Flower)
+  # ============================================
+  celery_flower:
+    build:
+      context: .
+      dockerfile: ./worker_service/Dockerfile
+    container_name: url_shortener_celery_flower
+    command: >
+      uv run celery -A worker_service.celery_app:celery_app flower
+      --port=5555
+      --loglevel=info
+      --url-prefix=flower
+    expose:
+      - "5555"
+    volumes:
+      - .:/app
+      - flower_data:/data
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    networks:
+      - url_shortener_network
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      com.url-shortener.service: "monitoring"
+      com.url-shortener.description: "Celery Flower monitoring dashboard"
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  url_shortener_network:
+    driver: bridge
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
+  mongo_data:
+    driver: local
+  mongo_config:
+    driver: local
+  redis_data:
+    driver: local
+  celery_beat_data:
+    driver: local
+  flower_data:
+    driver: local
+  nginx_cache:
+    driver: local
+  nginx_logs:
+    driver: local

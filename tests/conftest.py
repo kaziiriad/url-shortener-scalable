@@ -17,12 +17,12 @@ def fake_redis():
 
 @pytest_asyncio.fixture
 async def client(monkeypatch, fake_redis):
-    from ..app.core.config import settings
+    from common.core.config import settings
     settings.testing = True
 
-    from ..app.main import app as fastapi_app
-    from ..app.db.sql.connection import get_db_async, Base
-    from ..app.db.nosql.connection import get_db
+    from create_service.main import app as fastapi_app
+    from common.db.sql.connection import get_db_async, Base
+    from common.db.nosql.connection import get_db
 
     # --- PostgreSQL (SQLite in-memory) ---
     TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -44,7 +44,7 @@ async def client(monkeypatch, fake_redis):
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
 
-    monkeypatch.setattr("app.core.redis_client.RedisClient", lambda: fake_redis)
+    monkeypatch.setattr("common.core.redis_client.RedisClient", lambda: fake_redis)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
