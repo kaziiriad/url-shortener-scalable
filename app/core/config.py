@@ -1,3 +1,4 @@
+import string
 from pydantic_settings import BaseSettings
 from typing import Optional, Any, List
 from dotenv import load_dotenv
@@ -47,7 +48,8 @@ class Settings(BaseSettings):
 
     # Key management
     key_population_count: int = int(os.getenv("KEY_POPULATION_COUNT", "10"))
-    key_batch_size: int = int(os.getenv("KEY_BATCH_SIZE", "100"))
+    key_batch_size: int = int(os.getenv("KEY_BATCH_SIZE", "10000"))
+    key_generation_strategy: str = os.getenv("KEY_GENERATION_STRATEGY", "hybrid")  # hybrid, postgres, single, executemany
     key_population_schedule: int = int(os.getenv("KEY_POPULATION_SCHEDULE", "1800"))  # seconds
     key_minimum_threshold: int = int(os.getenv("KEY_MINIMUM_THRESHOLD", "1000")) # Alert if below this
 
@@ -66,7 +68,12 @@ class Settings(BaseSettings):
     create_url_rate_limit: str = os.getenv("CREATE_URL_RATE_LIMIT", "10/minute")
     redirect_rate_limit: str = os.getenv("REDIRECT_RATE_LIMIT", "10/minute")
 
-    
+    # Performance tuning
+    enable_key_generation_benchmark: bool = bool(os.getenv("ENABLE_KEY_GENERATION_BENCHMARK", "False").lower() in ("true", "1", "yes"))
+
+    # Key specifications
+    key_length: int = 7  # Fixed at 7 characters (matches DB column VARCHAR(7))
+    key_charset: str = string.ascii_letters + string.digits  # 62 characters
 
 
     class Config:

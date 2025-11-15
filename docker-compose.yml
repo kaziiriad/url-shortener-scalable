@@ -81,26 +81,16 @@ services:
       - NUM_FASTAPI_INSTANCES=3
       - NUM_CELERY_WORKERS=1
       
-      # Key Management (Static - will be overridden by adaptive)
-      - KEY_POPULATION_COUNT=1000
-      - KEY_POPULATION_SCHEDULE=1800
-      - KEY_MINIMUM_THRESHOLD=1000
+      # # Key Management (Static - will be overridden by adaptive)
+      # - KEY_POPULATION_COUNT=1000
+      # - KEY_POPULATION_SCHEDULE=1800
+      # - KEY_MINIMUM_THRESHOLD=1000
       
       # Adaptive Key Management (NEW)
-      - ENABLE_ADAPTIVE_GENERATION=true
-      - ENABLE_PREDICTIVE_GENERATION=true
-      - ENABLE_CONSUMPTION_TRACKING=true
-      - KEY_CRITICAL_THRESHOLD=100
-      - KEY_WARNING_THRESHOLD=1000
-      - KEY_HEALTHY_THRESHOLD=5000
-      - KEY_OPTIMAL_THRESHOLD=10000
-      - KEY_MAXIMUM_THRESHOLD=50000
-      - KEY_BATCH_EMERGENCY=5000
-      - KEY_BATCH_URGENT=2000
-      - KEY_BATCH_NORMAL=1000
-      - KEY_BATCH_MAINTENANCE=500
-      - ADAPTIVE_CHECK_INTERVAL=120
-      - PREDICTION_BUFFER_HOURS=4
+      - KEY_POPULATION_COUNT=100000
+      - KEY_POPULATION_SCHEDULE=300
+      - KEY_BATCH_SIZE=1000
+      - ENABLE_KEY_GENERATION_BENCHMARK=true
       
       # Circuit Breaker & Retry Config
       - CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
@@ -335,8 +325,9 @@ services:
       - REDIS_PASSWORD=
       
       # Key Management (Static)
-      - KEY_POPULATION_COUNT=50
+      - KEY_POPULATION_COUNT=100000
       - KEY_POPULATION_SCHEDULE=300
+      - KEY_BATCH_SIZE=1000
       
       # Adaptive Key Management (NEW)
       - ENABLE_ADAPTIVE_GENERATION=true

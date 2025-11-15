@@ -239,3 +239,16 @@ async def get_key_analytics(db: AsyncSession = Depends(get_db_async)):
     except Exception as e:
         logger.error(f"Error getting key analytics: {e}")
         return {"error": str(e)}
+
+
+@monitoring_router.post("/benchmark/key-generation")
+async def benchmark_key_generation(
+    count: int = 10000,
+    db: AsyncSession = Depends(get_db_async)
+):
+    """
+    Benchmark different key generation methods.
+    Use this to find the best method for your specific hardware.
+    """
+    results = await URLKeyRepository.benchmark_insert_methods(db, count)
+    return results
