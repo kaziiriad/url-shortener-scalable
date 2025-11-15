@@ -34,13 +34,14 @@ graph TD
     end
 
     subgraph "Application Tier"
-        A[FastAPI Applications<br/>3 Replicas<br/>Port 8000]
+        CS[Create Service<br/>Port 8000]
+        RS[Redirect Service<br/>Port 8001]
     end
 
     subgraph "Processing Tier"
         subgraph "Background Services"
             F[Celery Beat<br/>Task Scheduler]
-            E[Celery Worker<br/>Task Processor<br/>4 Concurrency]
+            E[Celery Worker<br/>Task Processor]
             G[Celery Flower<br/>Monitoring<br/>Port 5555]
         end
     end
@@ -54,14 +55,18 @@ graph TD
 
     %% User Traffic Flow
     U -->|HTTP/HTTPS| H
-    H -->|Load Balanced| A
-    H -->|Monitoring Access| G
+    H -->|/api/*| CS
+    H -->|/*| RS
+    H -->|/flower/*| G
 
     %% Application Data Access
-    A -->|Cache Lookup| B
-    A -->|DB Connection| P
+    CS -->|Cache Lookup| B
+    CS -->|DB Connection| P
     P -->|Pooled Connection| C
-    A -->|URL Storage| D
+    CS -->|URL Storage| D
+    RS -->|Cache Lookup| B
+    RS -->|URL Storage| D
+
 
     %% Background Processing Flow
     F -->|Schedule Tasks| E
@@ -78,7 +83,7 @@ graph TD
     
     class U external
     class H loadTier
-    class A appTier
+    class CS,RS appTier
     class F,E,G processTier
     class B,C,D,P dataTier
 ```
@@ -225,30 +230,21 @@ If you encounter issues with MongoDB, you can use the `cleanup_mongodb.sh` scrip
 
 ## Load Balancer and Rate Limiter
 
-This project includes a comprehensive Nginx load balancer and rate limiter configuration. The load balancer distributes traffic across three application instances, and the rate limiter helps prevent abuse and ensures high availability.
+This project includes a comprehensive Nginx load balancer and rate limiter configuration. The load balancer distributes traffic across the `create_service` and `redirect_service`, and the rate limiter helps prevent abuse and ensures high availability.
 
 ### Running with the Load Balancer
 
-To run the application with the Nginx load balancer, use the `docker-compose-lb.yml` file:
+To run the application with the Nginx load balancer, use the `docker-compose-decoupled.yml` file:
 
 ```bash
-docker-compose -f docker-compose-lb.yml up -d
+docker-compose -f docker-compose-decoupled.yml up -d
 ```
 
-This will start the Nginx load balancer, three instances of the application, and all the necessary backend services.
+This will start the Nginx load balancer, the `create_service`, `redirect_service`, and all the necessary backend services.
 
 ### Rate Limiting
 
-The following rate limits are in place:
-
-| Endpoint | Rate Limit | Burst | Purpose |
-|---|---|---|---|
-| `/api/v1/create` | 10/min | 3 | Prevent abuse of URL creation |
-| `/api/*` | 60/min | 10 | General API protection |
-| `/[a-zA-Z0-9]{6,8}` | 100/sec | 20 | High-volume redirects |
-| `/health` | 10/sec | 5 | Health check monitoring |
-
-The Nginx configuration file `nginx-lb.conf` contains the detailed configuration for the load balancer and rate limiter.
+The Nginx configuration file `nginx-decoupled.conf` contains the detailed configuration for the load balancer and rate limiter.
 
 ## 📋 Prerequisites
 
@@ -269,18 +265,18 @@ The Nginx configuration file `nginx-lb.conf` contains the detailed configuration
 
 2.  **Start all services**
     ```bash
-    docker-compose up -d
+    docker-compose -f docker-compose-decoupled.yml up -d
     ```
 
 3.  **Verify services are running**
     ```bash
-    docker-compose ps
+    docker-compose -f docker-compose-decoupled.yml ps
     ```
 
 4.  **Access the application**
-    - API: http://localhost:8000
-    - Flower Dashboard: http://localhost:5555
-    - API Documentation: http://localhost:8000/docs
+    - API: http://localhost/api/v1/create
+    - Flower Dashboard: http://localhost/flower
+    - API Documentation: http://localhost/docs
 
 ### Local Development
 
@@ -297,12 +293,19 @@ The Nginx configuration file `nginx-lb.conf` contains the detailed configuration
 
 3.  **Start external services**
     ```bash
-    docker-compose up -d redis postgres mongo_db
+    docker-compose -f docker-compose-decoupled.yml up -d redis postgres mongo_db pgbouncer
     ```
 
-4.  **Run the application**
+4.  **Run the applications**
     ```bash
-    uv run app.main:app --reload
+    # In terminal 1
+    uv run create_service.main:app --port 8000 --reload
+
+    # In terminal 2
+    uv run redirect_service.main:app --port 8001 --reload
+
+    # In terminal 3
+    uv run celery -A worker_service.celery_app:celery_app worker --loglevel=info
     ```
 
 ## 🔧 Configuration
@@ -338,7 +341,7 @@ Key environment variables in `.env`:
 ### Create Short URL
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/create" \
+curl -X POST "http://localhost/api/v1/create" \
   -H "Content-Type: application/json" \
   -d 
   {
@@ -351,7 +354,7 @@ curl -X POST "http://localhost:8000/api/v1/create" \
 ```json
 {
   "message": "URL created successfully",
-  "short_url": "http://localhost:8000/abc123",
+  "short_url": "http://localhost/abc123",
   "long_url": "https://www.example.com",
   "expires_at": "2025-12-31T23:59:59"
 }
@@ -362,7 +365,7 @@ curl -X POST "http://localhost:8000/api/v1/create" \
 Simply visit the short URL in your browser or use curl:
 
 ```bash
-curl -L "http://localhost:8000/abc123"
+curl -L "http://localhost/abc123"
 ```
 
 This will redirect you to the original long URL.
@@ -370,14 +373,15 @@ This will redirect you to the original long URL.
 ### Health Check
 
 ```bash
-curl "http://localhost:8000/health"
+curl "http://localhost/health"
 ```
 
 ## 🛠️ Services
 
 | Service | Port | Description |
 |---|---|---|
-| **web_app** | 8000 | Main FastAPI application |
+| **create_service** | 8000 | FastAPI service for creating URLs |
+| **redirect_service** | 8001 | FastAPI service for redirecting URLs |
 | **redis** | 6379 | Cache for fast URL lookups |
 | **pgbouncer** | 6432 | PostgreSQL connection pooler |
 | **postgres** | 5432 | Primary database for URL key management |
@@ -393,34 +397,38 @@ The system uses Celery for background processing:
 - **Key Pre-population**: Automatically generates unused short URL keys in PostgreSQL.
 - **Cleanup Tasks**: Removes expired URLs and maintains database health.
 
-Monitor tasks at: http://localhost:5555
+Monitor tasks at: http://localhost/flower
 
 ## 🗂️ Project Structure
 
 ```
 url_shortener_scalable/
-├── app/                   # Main application source code
-│   ├── core/              # Core configuration and utilities
-│   ├── db/                # Database connections and models
-│   │   ├── sql/           # PostgreSQL models and operations
-│   │   └── nosql/         # MongoDB connections
-│   ├── models/            # Pydantic schemas
-│   ├── routes/            # API route handlers
-│   ├── services/          # Business logic services
-│   ├── tasks/             # Celery background tasks
-│   ├── Dockerfile         # Dockerfile for the application
-│   └── main.py            # FastAPI application entry point
+├── create_service/        # Service for creating short URLs
+│   ├── routes/
+│   ├── services/
+│   └── Dockerfile
+├── redirect_service/      # Service for redirecting short URLs
+│   ├── routes/
+│   ├── services/
+│   └── Dockerfile
+├── worker_service/        # Celery worker for background tasks
+│   ├── tasks/
+│   └── Dockerfile
+├── common/                # Common code shared across services
+│   ├── core/
+│   ├── db/
+│   ├── models/
+│   └── utils/
 ├── ansible/               # Ansible playbooks and roles for deployment
 ├── tests/                 # Automated tests (unit, integration, API)
 ├── .dockerignore
-├── .env
 ├── .gitignore
 ├── .python-version
-├── docker-compose.yml     # Multi-service Docker setup for local development
-├── docker-compose-lb.yml  # Docker Compose for load-balanced setup
-├── nginx-lb.conf          # Nginx configuration for load balancer
-├── pyproject.toml         # Python dependencies and project config
-├── README.md              # This file
+├── docker-compose.yml
+├── docker-compose-decoupled.yml
+├── nginx-decoupled.conf
+├── pyproject.toml
+├── README.md
 └── uv.lock
 ```
 
@@ -463,10 +471,10 @@ The system is designed to handle high loads through:
 
 ### Adding New Features
 
-1.  **API Endpoints**: Add routes in `app/routes/`
-2.  **Background Tasks**: Create tasks in `app/tasks/`
-3.  **Database Models**: Update models in `app/db/sql/models.py`
-4.  **Services**: Add business logic in `app/services/`
+1.  **API Endpoints**: Add routes in `create_service/routes/` or `redirect_service/routes/`
+2.  **Background Tasks**: Create tasks in `worker_service/tasks/`
+3.  **Database Models**: Update models in `common/db/sql/models.py`
+4.  **Services**: Add business logic in `create_service/services/`, `redirect_service/services/`, or `worker_service/`
 
 ### Database Migrations
 
