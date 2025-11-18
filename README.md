@@ -74,12 +74,6 @@ graph TD
     E -->|DB Connection| P
     E -->|URL Operations| D
     G -->|Monitor| E
-
-    %% Styling for clarity
-    classDef loadTier fill:#ffebee
-    classDef appTier fill:#e8f5e8
-    classDef processTier fill:#fff3e0
-    classDef dataTier fill:#e3f2fd
     
     class U external
     class H loadTier
