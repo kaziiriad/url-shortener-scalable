@@ -28,7 +28,4 @@ service:
       receivers: [otlp]
       processors: [batch]
       exporters: [otlp/tempo, debug]
-    logs:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [debug]
+    # Logs are handled by Promtail, not OTEL collector

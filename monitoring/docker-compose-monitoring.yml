@@ -55,6 +55,24 @@ services:
       - url_shortener_network
 
   # ============================================
+  # PROMTAIL (Log Collector)
+  # ============================================
+  promtail:
+    image: grafana/promtail:latest
+    container_name: url_shortener_promtail
+    restart: unless-stopped
+    command: ["--config.file=/etc/promtail/promtail-config.yaml"]
+    volumes:
+      - ./promtail-config.yaml:/etc/promtail/promtail-config.yaml
+      - promtail_positions:/tmp
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      - loki
+    networks:
+      - url_shortener_network
+
+  # ============================================
   # GRAFANA (Visualization)
   # ============================================
   grafana:
@@ -88,3 +106,4 @@ volumes:
   tempo_data:
   loki_data:
   grafana_data:
+  promtail_positions:

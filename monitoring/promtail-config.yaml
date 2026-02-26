@@ -1,0 +1,51 @@
+# Minimal Promtail configuration for scraping Docker container logs
+# TODO(human): Configure custom pipeline stages for log parsing and enrichment
+
+server:
+  http_listen_port: 3101
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker-logs
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: name
+            values: ["url_shortener.*"]
+
+    relabel_configs:
+      # Extract container name
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container_name
+
+      # Get service name from Docker labels
+      - source_labels: ["__meta_docker_container_label_com_url_shortener_service"]
+        target_label: service
+        regex: "(.+)"
+
+      # Add compose service name
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: compose_service
+
+      # Set job name
+      - replacement: "docker-logs"
+        target_label: job
+
+    pipeline_stages:
+      # Parse Docker's JSON log format
+      - json:
+          expressions:
+            output: log
+            stream: stream
+            time: time
+
+      # Set the actual log content
+      - output:
+          source: output
