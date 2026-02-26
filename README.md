@@ -7,9 +7,12 @@ A high-performance, scalable URL shortener service built with FastAPI, featuring
 - **Fast URL Shortening**: Generate short URLs with pre-populated keys for instant response.
 - **Redis Caching**: Lightning-fast redirects with Redis-first lookup.
 - **Efficient Connection Pooling**: Uses PgBouncer to manage PostgreSQL connections efficiently, reducing overhead and improving performance.
+- **Repository Pattern**: A clean and maintainable data access layer using the repository pattern.
+- **Efficient Key Pre-population**: A highly efficient key pre-population mechanism that uses a raw SQL query with `unnest` to bulk-insert keys.
 - **Dual Database**: PostgreSQL for pre-populating and managing a pool of short URL keys, and MongoDB for storing the mapping between short and long URLs (MongoDB v6.0).
 - **Robust Background Processing**: Celery workers with optimized database connections and heartbeat monitoring to ensure reliable task execution.
 - **Automated Database Initialization**: The PostgreSQL database is automatically initialized with the required schema on startup.
+- **Observability Stack**: Full observability with Tempo for distributed tracing, Loki for log aggregation, Grafana for visualization, and OpenTelemetry instrumentation across all services.
 - **Monitoring**: Celery Flower dashboard for task monitoring, accessible via Nginx proxy with proper static asset and API routing.
 - **Automated Testing**: Comprehensive `pytest` framework with mocking for robust unit and integration tests.
 - **Containerized**: Full Docker setup with docker-compose.
@@ -23,6 +26,7 @@ A high-performance, scalable URL shortener service built with FastAPI, featuring
 
 ```mermaid
 graph TD
+
     subgraph "External Layer"
         U[Users]
     end
@@ -32,13 +36,14 @@ graph TD
     end
 
     subgraph "Application Tier"
-        A[FastAPI Applications<br/>3 Replicas<br/>Port 8000]
+        CS[Create Service<br/>Port 8000]
+        RS[Redirect Service<br/>Port 8001]
     end
 
     subgraph "Processing Tier"
         subgraph "Background Services"
             F[Celery Beat<br/>Task Scheduler]
-            E[Celery Worker<br/>Task Processor<br/>4 Concurrency]
+            E[Celery Worker<br/>Task Processor]
             G[Celery Flower<br/>Monitoring<br/>Port 5555]
         end
     end
@@ -50,16 +55,29 @@ graph TD
         D[MongoDB<br/>URL Storage<br/>Port 27017]
     end
 
+    subgraph "Observability Tier"
+        subgraph "Monitoring Stack"
+            L[Loki<br/>Log Aggregation<br/>Port 3100]
+            T[Tempo<br/>Distributed Tracing<br/>Port 3200]
+            O[OTEL Collector<br/>Traces Pipeline<br/>Port 4317/4318]
+            R[Promtail<br/>Log Collector]
+            Z[Grafana<br/>Visualization<br/>Port 3000]
+        end
+    end
+
     %% User Traffic Flow
     U -->|HTTP/HTTPS| H
-    H -->|Load Balanced| A
-    H -->|Monitoring Access| G
+    H -->|/api/*| CS
+    H -->|/*| RS
+    H -->|/flower/*| G
 
     %% Application Data Access
-    A -->|Cache Lookup| B
-    A -->|DB Connection| P
+    CS -->|Cache Lookup| B
+    CS -->|DB Connection| P
     P -->|Pooled Connection| C
-    A -->|URL Storage| D
+    CS -->|URL Storage| D
+    RS -->|Cache Lookup| B
+    RS -->|URL Storage| D
 
     %% Background Processing Flow
     F -->|Schedule Tasks| E
@@ -68,17 +86,24 @@ graph TD
     E -->|URL Operations| D
     G -->|Monitor| E
 
-    %% Styling for clarity
-    classDef loadTier fill:#ffebee
-    classDef appTier fill:#e8f5e8
-    classDef processTier fill:#fff3e0
-    classDef dataTier fill:#e3f2fd
-    
+    %% Observability Flow
+    CS -->|OTLP Traces| O
+    RS -->|OTLP Traces| O
+    E -->|OTLP Traces| O
+    O -->|Traces| T
+    R -->|Container Logs| L
+    R -.->|Scrape Logs| CS
+    R -.->|Scrape Logs| RS
+    R -.->|Scrape Logs| E
+    Z -->|Query| T
+    Z -->|Query| L
+
     class U external
     class H loadTier
-    class A appTier
+    class CS,RS appTier
     class F,E,G processTier
     class B,C,D,P dataTier
+    class L,T,O,R,Z observabilityTier
 ```
 
 ### AWS Architecture
@@ -223,30 +248,21 @@ If you encounter issues with MongoDB, you can use the `cleanup_mongodb.sh` scrip
 
 ## Load Balancer and Rate Limiter
 
-This project includes a comprehensive Nginx load balancer and rate limiter configuration. The load balancer distributes traffic across three application instances, and the rate limiter helps prevent abuse and ensures high availability.
+This project includes a comprehensive Nginx load balancer and rate limiter configuration. The load balancer distributes traffic across the `create_service` and `redirect_service`, and the rate limiter helps prevent abuse and ensures high availability.
 
 ### Running with the Load Balancer
 
-To run the application with the Nginx load balancer, use the `docker-compose-lb.yml` file:
+To run the application with the Nginx load balancer, use the `docker-compose-decoupled.yml` file:
 
 ```bash
-docker-compose -f docker-compose-lb.yml up -d
+docker-compose -f docker-compose-decoupled.yml up -d
 ```
 
-This will start the Nginx load balancer, three instances of the application, and all the necessary backend services.
+This will start the Nginx load balancer, the `create_service`, `redirect_service`, and all the necessary backend services.
 
 ### Rate Limiting
 
-The following rate limits are in place:
-
-| Endpoint | Rate Limit | Burst | Purpose |
-|---|---|---|---|
-| `/api/v1/create` | 10/min | 3 | Prevent abuse of URL creation |
-| `/api/*` | 60/min | 10 | General API protection |
-| `/[a-zA-Z0-9]{6,8}` | 100/sec | 20 | High-volume redirects |
-| `/health` | 10/sec | 5 | Health check monitoring |
-
-The Nginx configuration file `nginx-lb.conf` contains the detailed configuration for the load balancer and rate limiter.
+The Nginx configuration file `nginx-decoupled.conf` contains the detailed configuration for the load balancer and rate limiter.
 
 ## 📋 Prerequisites
 
@@ -267,18 +283,24 @@ The Nginx configuration file `nginx-lb.conf` contains the detailed configuration
 
 2.  **Start all services**
     ```bash
-    docker-compose up -d
+    docker-compose -f docker-compose-decoupled.yml up -d
     ```
 
-3.  **Verify services are running**
+3.  **Start monitoring stack (optional)**
     ```bash
-    docker-compose ps
+    cd monitoring && docker-compose -f docker-compose-monitoring.yml up -d
     ```
 
-4.  **Access the application**
-    - API: http://localhost:8000
-    - Flower Dashboard: http://localhost:5555
-    - API Documentation: http://localhost:8000/docs
+4.  **Verify services are running**
+    ```bash
+    docker-compose -f docker-compose-decoupled.yml ps
+    ```
+
+5.  **Access the application**
+    - API: http://localhost/api/v1/create
+    - Flower Dashboard: http://localhost/flower
+    - API Documentation: http://localhost/docs
+    - Grafana Dashboard: http://localhost:3000 (admin/admin)
 
 ### Local Development
 
@@ -295,12 +317,19 @@ The Nginx configuration file `nginx-lb.conf` contains the detailed configuration
 
 3.  **Start external services**
     ```bash
-    docker-compose up -d redis postgres mongo_db
+    docker-compose -f docker-compose-decoupled.yml up -d redis postgres mongo_db pgbouncer
     ```
 
-4.  **Run the application**
+4.  **Run the applications**
     ```bash
-    uv run app.main:app --reload
+    # In terminal 1
+    uv run create_service.main:app --port 8000 --reload
+
+    # In terminal 2
+    uv run redirect_service.main:app --port 8001 --reload
+
+    # In terminal 3
+    uv run celery -A worker_service.celery_app:celery_app worker --loglevel=info
     ```
 
 ## 🔧 Configuration
@@ -322,6 +351,7 @@ Key environment variables in `.env`:
 | `PORT` | Application port | `8000` |
 | `BASE_URL` | Base URL for short links | `http://localhost:8000` |
 | `KEY_POPULATION_COUNT` | Number of keys to pre-populate | `10` |
+| `KEY_BATCH_SIZE` | The batch size for pre-populating keys | `100` |
 | `KEY_POPULATION_SCHEDULE` | Schedule for key pre-population (in seconds) | `1800` |
 | `TASK_RETRY_DELAY` | Delay for retrying failed tasks (in seconds) | `60` |
 | `TASK_MAX_RETRIES` | Maximum number of retries for failed tasks | `3` |
@@ -329,15 +359,26 @@ Key environment variables in `.env`:
 | `CELERY_DB_POOL_SIZE` | Celery database connection pool size | `5` |
 | `CELERY_DB_MAX_OVERFLOW` | Celery database connection pool max overflow | `5` |
 
+### Observability Configuration
+
+| Variable | Description | Default Value |
+|---|---|---|
+| `TRACING_ENABLED` | Enable OpenTelemetry tracing | `true` |
+| `SERVICE_NAME` | Service name for tracing | Service-specific |
+| `SERVICE_VERSION` | Service version for tracing | `1.0.0` |
+| `ENVIRONMENT` | Deployment environment | `development` |
+| `OTLP_ENDPOINT` | OpenTelemetry collector endpoint | `http://otel-collector:4317` |
+
 
 ## 📚 API Usage
 
 ### Create Short URL
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/create" \
+curl -X POST "http://localhost/api/v1/create" \
   -H "Content-Type: application/json" \
-  -d {
+  -d 
+  {
     "long_url": "https://www.example.com",
     "expires_at": "2025-12-31T23:59:59"
   }
@@ -347,7 +388,7 @@ curl -X POST "http://localhost:8000/api/v1/create" \
 ```json
 {
   "message": "URL created successfully",
-  "short_url": "http://localhost:8000/abc123",
+  "short_url": "http://localhost/abc123",
   "long_url": "https://www.example.com",
   "expires_at": "2025-12-31T23:59:59"
 }
@@ -358,7 +399,7 @@ curl -X POST "http://localhost:8000/api/v1/create" \
 Simply visit the short URL in your browser or use curl:
 
 ```bash
-curl -L "http://localhost:8000/abc123"
+curl -L "http://localhost/abc123"
 ```
 
 This will redirect you to the original long URL.
@@ -366,21 +407,39 @@ This will redirect you to the original long URL.
 ### Health Check
 
 ```bash
-curl "http://localhost:8000/health"
+curl "http://localhost/health"
 ```
 
 ## 🛠️ Services
 
+### Application Services
+
 | Service | Port | Description |
 |---|---|---|
-| **web_app** | 8000 | Main FastAPI application |
+| **create_service** | 8000 | FastAPI service for creating URLs |
+| **redirect_service** | 8001 | FastAPI service for redirecting URLs |
+| **celery_worker** | - | Background task processor |
+| **celery_beat** | - | Periodic task scheduler |
+| **celery_flower** | 5555 | Task monitoring dashboard |
+
+### Data Services
+
+| Service | Port | Description |
+|---|---|---|
 | **redis** | 6379 | Cache for fast URL lookups |
 | **pgbouncer** | 6432 | PostgreSQL connection pooler |
 | **postgres** | 5432 | Primary database for URL key management |
 | **mongo_db** | 27017 | Database for URL storage and analytics (MongoDB v6.0) |
-| **celery_worker** | - | Background task processor |
-| **celery_beat** | - | Periodic task scheduler |
-| **celery_flower** | 5555 | Task monitoring dashboard |
+
+### Observability Services
+
+| Service | Port | Description |
+|---|---|---|
+| **grafana** | 3000 | Visualization dashboard |
+| **tempo** | 3200 | Distributed tracing backend |
+| **loki** | 3100 | Log aggregation |
+| **otel-collector** | 4317/4318 | OpenTelemetry trace collector |
+| **promtail** | - | Docker log collector for Loki |
 
 ## 🔄 Background Tasks
 
@@ -389,35 +448,80 @@ The system uses Celery for background processing:
 - **Key Pre-population**: Automatically generates unused short URL keys in PostgreSQL.
 - **Cleanup Tasks**: Removes expired URLs and maintains database health.
 
-Monitor tasks at: http://localhost:5555
+Monitor tasks at: http://localhost/flower
 
 ## 🗂️ Project Structure
 
 ```
 url_shortener_scalable/
-├── app/                   # Main application source code
-│   ├── core/              # Core configuration and utilities
-│   ├── db/                # Database connections and models
-│   │   ├── sql/           # PostgreSQL models and operations
-│   │   └── nosql/         # MongoDB connections
-│   ├── models/            # Pydantic schemas
-│   ├── routes/            # API route handlers
-│   ├── services/          # Business logic services
-│   ├── tasks/             # Celery background tasks
-│   ├── Dockerfile         # Dockerfile for the application
-│   └── main.py            # FastAPI application entry point
+├── create_service/        # Service for creating short URLs
+│   ├── routes/
+│   ├── services/
+│   └── Dockerfile
+├── redirect_service/      # Service for redirecting short URLs
+│   ├── routes/
+│   ├── services/
+│   └── Dockerfile
+├── worker_service/        # Celery worker for background tasks
+│   ├── tasks/
+│   └── Dockerfile
+├── common/                # Common code shared across services
+│   ├── core/
+│   ├── db/
+│   ├── models/
+│   └── utils/
+├── monitoring/            # Observability stack (Tempo, Loki, Grafana)
+│   ├── grafana/           # Grafana dashboard provisioning
+│   ├── tempo/             # Tempo tracing configuration
+│   └── docker-compose-monitoring.yml
 ├── ansible/               # Ansible playbooks and roles for deployment
 ├── tests/                 # Automated tests (unit, integration, API)
 ├── .dockerignore
-├── .env
 ├── .gitignore
 ├── .python-version
-├── docker-compose.yml     # Multi-service Docker setup for local development
-├── docker-compose-lb.yml  # Docker Compose for load-balanced setup
-├── nginx-lb.conf          # Nginx configuration for load balancer
-├── pyproject.toml         # Python dependencies and project config
-├── README.md              # This file
+├── docker-compose.yml
+├── docker-compose-decoupled.yml
+├── nginx-decoupled.conf
+├── pyproject.toml
+├── README.md
 └── uv.lock
+```
+
+## 📊 Observability
+
+This project includes a comprehensive observability stack for monitoring, tracing, and log aggregation.
+
+### Distributed Tracing with Tempo
+
+- **Tempo**: Distributed tracing backend that stores and queries trace data
+- **OpenTelemetry**: Instrumentation library for generating traces across all services
+- **Context Propagation**: Automatic trace context propagation across service boundaries
+
+View traces in Grafana at: http://localhost:3000
+
+### Log Aggregation with Loki
+
+- **Loki**: Log aggregation system inspired by Prometheus
+- **Promtail**: Log collector that scrapes Docker container logs
+- **Structured Logging**: JSON-formatted logs with service context
+
+Query logs in Grafana using LogQL:
+```logql
+{compose_service="create_service"} |= "ERROR"
+```
+
+### Metrics and Visualization
+
+Grafana provides pre-configured dashboards for:
+- Distributed traces (service maps, latency, errors)
+- Logs (search, filter by labels)
+- Service health and performance
+
+### Trace-Log Correlation
+
+Services automatically inject trace IDs into log messages for correlation:
+```python
+logger.info("Processing URL creation", extra={"trace_id": trace_id})
 ```
 
 ## 🧪 Testing
@@ -459,10 +563,10 @@ The system is designed to handle high loads through:
 
 ### Adding New Features
 
-1.  **API Endpoints**: Add routes in `app/routes/`
-2.  **Background Tasks**: Create tasks in `app/tasks/`
-3.  **Database Models**: Update models in `app/db/sql/models.py`
-4.  **Services**: Add business logic in `app/services/`
+1.  **API Endpoints**: Add routes in `create_service/routes/` or `redirect_service/routes/`
+2.  **Background Tasks**: Create tasks in `worker_service/tasks/`
+3.  **Database Models**: Update models in `common/db/sql/models.py`
+4.  **Services**: Add business logic in `create_service/services/`, `redirect_service/services/`, or `worker_service/`
 
 ### Database Migrations
 
@@ -470,8 +574,12 @@ The application automatically initializes the PostgreSQL database on startup. Fo
 
 ### Monitoring
 
-- **Application Logs**: `docker-compose logs web_app`
-- **Task Monitoring**: http://localhost:5555
+- **Grafana Dashboard**: http://localhost:3000 (admin/admin)
+  - Distributed traces: View service flows and latency
+  - Logs: Search and filter container logs
+  - Metrics: Service health and performance
+- **Task Monitoring**: http://localhost:5555 (Celery Flower)
+- **Application Logs**: View in Grafana Loki or via `docker-compose logs <service>`
 - **Database Health**: Check via health endpoint
 
 ## 🚀 Deployment
