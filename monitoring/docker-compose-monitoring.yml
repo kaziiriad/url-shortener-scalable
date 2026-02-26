@@ -1,0 +1,90 @@
+name: url_shortener_scalable
+
+services:
+  # ============================================
+  # OPENTELEMETRY COLLECTOR
+  # ============================================
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: url_shortener_otel_collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - tempo
+    networks:
+      - url_shortener_network
+
+  # ============================================
+  # TEMPO (Distributed Tracing Backend)
+  # ============================================
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: url_shortener_tempo
+    restart: unless-stopped
+    user: "0"
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo.yaml
+      - tempo_data:/tmp/tempo
+    ports:
+      - "3200:3200"
+      - "4317"
+    networks:
+      - url_shortener_network
+
+  # ============================================
+  # LOKI (Log Aggregation)
+  # ============================================
+  loki:
+    image: grafana/loki:latest
+    container_name: url_shortener_loki
+    restart: unless-stopped
+    user: "0"
+    command: ["-config.file=/etc/loki-config.yaml"]
+    volumes:
+      - ./loki-config.yaml:/etc/loki-config.yaml
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - url_shortener_network
+
+  # ============================================
+  # GRAFANA (Visualization)
+  # ============================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: url_shortener_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    depends_on:
+      - tempo
+      - loki
+    networks:
+      - url_shortener_network
+
+networks:
+  url_shortener_network:
+    name: url_shortener_scalable_url_shortener_network
+    driver: bridge
+    external: true
+
+
+volumes:
+  tempo_data:
+  loki_data:
+  grafana_data:

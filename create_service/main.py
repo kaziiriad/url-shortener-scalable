@@ -4,18 +4,19 @@ from common.core.config import settings
 from create_service.routes.urls import url_router
 from create_service.routes.monitoring import monitoring_router
 from common.db.sql.init_db import init_database
+from common.utils.logger import initialize_logger
+from common.core.tracing import setup_tracing
 import uvicorn
-import logging
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = initialize_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
     logger.info("🚀 Starting URL Shortener application...")
+    setup_tracing(app)
     if not settings.testing:
         try:
             await init_database()

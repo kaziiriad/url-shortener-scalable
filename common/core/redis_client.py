@@ -1,6 +1,8 @@
 from common.core.config import settings
 from redis.asyncio import Redis
+from opentelemetry.instrumentation.redis import RedisInstrumentor
 
+RedisInstrumentor().instrument()
 class RedisClient:
     def __init__(self) -> None:
         self.redis_client = Redis(

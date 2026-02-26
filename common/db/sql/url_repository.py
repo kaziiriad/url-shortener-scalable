@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from common.core.config import settings
 from common.db.sql.models import URL
 # from sqlalchemy.sql import func, text
+from opentelemetry import trace
+
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +16,10 @@ class URLKeyRepository:
 
     @staticmethod
     def _generate_key():
-        return ''.join(random.choices(string.ascii_letters + string.digits, k=7))
+        tracer = trace.get_tracer(__name__)
+        with tracer.start_as_current_span("generate_key") as span:
+            span.add_event("generate_key_called")
+            return ''.join(random.choices(string.ascii_letters + string.digits, k=7))
     
     @staticmethod
     async def get_unused_key(session: AsyncSession):
@@ -22,33 +27,42 @@ class URLKeyRepository:
         Atomically acquire an unused key using SELECT FOR UPDATE SKIP LOCKED.
         This prevents race conditions in distributed systems.
         """
-        try:
-            result = await session.execute(
-                select(URL)
-                .where(~URL.is_used)
-                .limit(1)
-                .with_for_update(skip_locked=True)  # Key fix for race conditions!
-            )
-            url = result.scalars().first()
-
-            if url is not None:
-                # Mark the key as used
-                await session.execute(
-                    update(URL)
-                    .where(URL.id == url.id)
-                    .values(is_used=True)
+        tracer = trace.get_tracer(__name__)
+        with tracer.start_as_current_span("get_unused_key") as span:
+            try:
+                span.add_event("get_unused_key_query_started")
+                result = await session.execute(
+                    select(URL)
+                    .where(~URL.is_used)
+                    .limit(1)
+                    .with_for_update(skip_locked=True)  # Key fix for race conditions!
                 )
-                await session.commit()
-                logger.info(f"Acquired key: {url.key}")
-                return url
-            else:
-                logger.warning("No unused keys available")
-                return None
+                span.add_event("get_unused_key_query_completed")
+                url = result.scalars().first()
 
-        except Exception as e:
-            await session.rollback()
-            logger.error(f"Error acquiring unused key: {e}")
-            raise
+                if url is not None:
+                    # Mark the key as used
+                    span.add_event("get_unused_key_marking_key_as_used")
+                    await session.execute(
+                        update(URL)
+                        .where(URL.id == url.id)
+                        .values(is_used=True)
+                    )
+                    await session.commit()
+                    span.add_event("get_unused_key_marking_key_as_used_completed")
+                    logger.info(f"Acquired key: {url.key}")
+                    return url
+
+                else:
+                    span.add_event("get_unused_key_no_unused_keys_available")
+                    logger.warning("No unused keys available")
+                    return None
+
+            except Exception as e:
+                span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                await session.rollback()
+                logger.error(f"Error acquiring unused key: {e}")
+                raise
     
     @staticmethod
     async def get_unused_key_raw(session: AsyncSession) -> dict | None:
@@ -56,26 +70,41 @@ class URLKeyRepository:
         Raw SQL version - use if ORM becomes a bottleneck.
         Benchmark before switching!
         """
-
-        result = await session.execute(
-            text("""
-                UPDATE urls 
-                SET is_used = true 
-                WHERE id = (
-                    SELECT id FROM urls 
-                    WHERE is_used = false 
-                    LIMIT 1 
-                    FOR UPDATE SKIP LOCKED
+        tracer = trace.get_tracer(__name__)
+        with tracer.start_as_current_span("get_unused_key_raw") as span:
+            try:
+                span.add_event("get_unused_key_raw_query_started")
+                result = await session.execute(
+                        text("""
+                        UPDATE urls 
+                        SET is_used = true 
+                        WHERE id = (
+                            SELECT id FROM urls 
+                            WHERE is_used = false 
+                            LIMIT 1 
+                            FOR UPDATE SKIP LOCKED
+                        )
+                        RETURNING id, key
+                    """)
                 )
-                RETURNING id, key
-            """)
-        )
-        row = result.first()
-        
-        if row:
-            await session.commit()
-            return {"id": row[0], "key": row[1]}
-        return None
+                span.add_event("get_unused_key_raw_query_completed")
+                row = result.first()
+            
+                if row:
+                    await session.commit()
+                    span.add_event("get_unused_key_raw_marking_key_as_used")
+                    return {"id": row[0], "key": row[1]}
+                span.add_event("get_unused_key_raw_no_unused_keys_available")
+                return None
+
+            except Exception as e:
+                span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                await session.rollback()
+                logger.error(
+                    "Error acquiring unused key",
+                    extra={"error": e}
+                )
+                raise
 
 
     @staticmethod
@@ -91,32 +120,44 @@ class URLKeyRepository:
         Returns:
             int: Number of keys successfully inserted
         """
-        try:
-            # Generate keys efficiently - collision probability is negligible
-            # With 62^7 possibilities and 100K keys, collision chance < 0.0001%
-            if count <= 0:
-                logger.info("Key pre-population count is zero or negative, skipping.")
-                return 0
+        tracer = trace.get_tracer(__name__)
+        with tracer.start_as_current_span("pre_populate_keys") as span:
+            try:
+                # Generate keys efficiently - collision probability is negligible
+                # With 62^7 possibilities and 100K keys, collision chance < 0.0001%
+                if count <= 0:
+                    span.add_event("pre_populate_keys_count_is_zero_or_negative")
+                    logger.info("Key pre-population count is zero or negative, skipping.")
+                    return 0
 
-            keys = [URLKeyRepository._generate_key() for _ in range(count)]
+                keys = [URLKeyRepository._generate_key() for _ in range(count)]
             
-            # Use larger batches for better performance
-            batch_size = settings.key_batch_size
-            
-            for i in range(0, len(keys), batch_size):
-                batch = keys[i:i + batch_size]
-                await URLKeyRepository._bulk_insert_keys_optimized(session, batch, commit=False)
-            
-            # Single commit at the end for maximum efficiency
-            await session.commit()
-            
-            logger.info(f"Pre-populated {count} keys")
-            return count
+                # Use larger batches for better performance
+                batch_size = settings.key_batch_size
 
-        except Exception as e:
-            await session.rollback()
-            logger.error(f"Error pre-populating keys: {e}")
-            raise
+                span.add_event("pre_populate_keys_bulk_insert_keys_started")                
+                for i in range(0, len(keys), batch_size):
+                    batch = keys[i:i + batch_size]
+                    await URLKeyRepository._bulk_insert_keys_optimized(session, batch, commit=False)
+                span.add_event("pre_populate_keys_bulk_insert_keys_completed")
+            
+                # Single commit at the end for maximum efficiency
+                await session.commit()
+                span.add_event("pre_populate_keys_completed")
+                logger.info(
+                    "Pre-populated {count} keys",
+                    extra={"count": count}
+                )
+                return count
+
+            except Exception as e:
+                span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                await session.rollback()
+                logger.error(
+                    "Error pre-populating keys",
+                    extra={"error": e}
+                )
+                raise
 
     @staticmethod
     async def _bulk_insert_keys(session: AsyncSession, keys: list[str]) -> int:
@@ -167,25 +208,37 @@ class URLKeyRepository:
     @staticmethod
     async def get_available_key_count(session: AsyncSession) -> int:
         """Get count of available unused keys."""
-        try:
-            result = await session.execute(
-                select(func.count(URL.id)).where(~URL.is_used)
-            )
-            count = result.scalar()
-            return count or 0
-        except Exception as e:
-            logger.error(f"Error getting available key count: {e}")
-            return 0
+        tracer = trace.get_tracer(__name__)
+        with tracer.start_as_current_span("get_available_key_count") as span:
+            try:
+                span.add_event("get_available_key_count_query_started")
+                result = await session.execute(
+                    select(func.count(URL.id)).where(~URL.is_used)
+                )
+                span.add_event("get_available_key_count_query_completed")
+                count = result.scalar()
+                span.add_event("get_available_key_count_returning_count", {"count": count})
+                return count or 0
+            except Exception as e:
+                span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                logger.error(f"Error getting available key count: {e}")
+                return 0
 
     @staticmethod
     async def get_total_key_count(session: AsyncSession) -> int:
         """Get total count of keys."""
-        try:
-            result = await session.execute(
-                select(func.count(URL.id))
-            )
-            count = result.scalar()
-            return count or 0
-        except Exception as e:
-            logger.error(f"Error getting total key count: {e}")
-            return 0
+        tracer = trace.get_tracer(__name__)
+        with tracer.start_as_current_span("get_total_key_count") as span:
+            try:
+                span.add_event("get_total_key_count_query_started")
+                result = await session.execute(
+                    select(func.count(URL.id))
+                )
+                span.add_event("get_total_key_count_query_completed")
+                count = result.scalar()
+                span.add_event("get_total_key_count_returning_count", {"count": count})
+                return count or 0
+            except Exception as e:
+                span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                logger.error(f"Error getting total key count: {e}")
+                return 0    

@@ -6,26 +6,71 @@ from common.db.sql.connection import get_db_async
 from common.core.redis_client import RedisClient
 from create_service.services.url_service import URLService
 from common.models.schemas import URLCreate
+from opentelemetry import trace
+import logging
 
+logger = logging.getLogger(__name__)
 url_router = APIRouter()
 
 @url_router.post("/create")
 async def create_url(url: URLCreate, session: AsyncSession = Depends(get_db_async), mongo_db = Depends(get_db)):
-    try:
-        # Use the URLService classmethod directly
-        url_data = await URLService.store_url(session=session, mongo_db=mongo_db, url=url)
+
+    tracer = trace.get_tracer(__name__)
+    with tracer.start_as_current_span("create_url_api") as span:
+        span_ctx = span.get_span_context()
+        try:
+            # Use the URLService classmethod directly
+            span.add_event("URL service called")
+            url_data = await URLService.store_url(session=session, mongo_db=mongo_db, url=url)
+            span.add_event("URL service returned")
         
-        # Store URL mapping in Redis for fast retrieval
-        redis_client = RedisClient()
-        await redis_client.set(url_data.short_url_id, url_data.model_dump_json(), expires_in=1800)
-        
-        return {
-            "message": "URL created successfully",
-            "short_url": f"{settings.base_url}/{url_data.short_url_id}",
-            "long_url": url_data.long_url,
-            "expires_at": url_data.expires_at
-        }
-    except HTTPException as http_exc:
-        raise http_exc
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating URL via API: {str(e)}")
+            # Store URL mapping in Redis for fast retrieval
+            span.add_event("Redis client initialized")
+            redis_client = RedisClient()
+            span.add_event("Redis client set")
+            await redis_client.set(url_data.short_url_id, url_data.model_dump_json(), expires_in=1800)
+            span.add_event("Redis client set completed")
+            
+            span.set_status(trace.Status(trace.StatusCode.OK))
+            logger.info(
+                "URL created successfully",
+                extra={
+                    "trace_id": format(span_ctx.trace_id, "032x"),
+                    "span_id": format(span_ctx.span_id, "016x"),
+                    "span_name": span.name,
+                    "span_kind": span.kind,
+                    "span_status": span.status,
+                }
+            )
+            return {
+                "message": "URL created successfully",
+                "short_url": f"{settings.base_url}/{url_data.short_url_id}",
+                "long_url": url_data.long_url,
+                "expires_at": url_data.expires_at
+            }
+        except HTTPException as http_exc:
+            span.set_status(trace.Status(trace.StatusCode.ERROR, str(http_exc)))
+            logger.error(
+                "HTTP Exception",
+                extra={
+                    "trace_id": format(span_ctx.trace_id, "032x"),
+                    "span_id": format(span_ctx.span_id, "016x"),
+                    "span_name": span.name,
+                    "span_kind": span.kind,
+                    "span_status": span.status,
+                }
+            )
+            raise http_exc
+        except Exception as e:
+            span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+            logger.error(
+                "Exception",
+                extra={
+                    "trace_id": format(span_ctx.trace_id, "032x"),
+                    "span_id": format(span_ctx.span_id, "016x"),
+                    "span_name": span.name,
+                    "span_kind": span.kind,
+                    "span_status": span.status,
+                }
+            )
+            raise HTTPException(status_code=500, detail=f"Error creating URL via API: {str(e)}")

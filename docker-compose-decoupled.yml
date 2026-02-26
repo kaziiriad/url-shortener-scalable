@@ -45,9 +45,9 @@ services:
       - "8000"
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
     environment:
+      # Python Path
+      - PYTHONPATH=/app
       # Application Config
       - HOST=0.0.0.0
       - PORT=8000
@@ -76,6 +76,11 @@ services:
       - DB_RETRY_ATTEMPTS=3
       - DB_RETRY_DELAY=1.0
       - DB_RETRY_BACKOFF=2.0
+      - TRACING_ENABLED=true
+      - SERVICE_NAME=create_service
+      - SERVICE_VERSION=1.0.0
+      - ENVIRONMENT=development
+      - OTLP_ENDPOINT=http://otel-collector:4317
     networks:
       - url_shortener_network
     depends_on:
@@ -104,9 +109,9 @@ services:
       - "8001:8001"
     expose:
       - "8001"
-    volumes:
-      - .:/app
     environment:
+      # Python Path
+      - PYTHONPATH=/app
       # Application Config
       - HOST=0.0.0.0
       - PORT=8001
@@ -128,6 +133,11 @@ services:
       - DB_RETRY_ATTEMPTS=3
       - DB_RETRY_DELAY=1.0
       - DB_RETRY_BACKOFF=2.0
+      - TRACING_ENABLED=true
+      - SERVICE_NAME=redirect_service
+      - SERVICE_VERSION=1.0.0
+      - ENVIRONMENT=development
+      - OTLP_ENDPOINT=http://otel-collector:4317
     networks:
       - url_shortener_network
     depends_on:
@@ -304,15 +314,20 @@ services:
       --loglevel=info
       --hostname=worker1@%h
       --queues=db_tasks,celery
-    volumes:
-      - .:/app
     environment:
+      # Python Path
+      - PYTHONPATH=/app
       # Database Connections (via PgBouncer)
       - DB_HOST=pgbouncer
       - DB_PORT=6432
       - DB_USER=postgres
       - DB_PASSWORD=pgpassword
       - DB_NAME=url_shortener
+      - TRACING_ENABLED=true
+      - SERVICE_NAME=celery_worker
+      - SERVICE_VERSION=1.0.0
+      - ENVIRONMENT=development
+      - OTLP_ENDPOINT=http://otel-collector:4317
       
       # MongoDB
       - MONGO_URI=mongodb://mongo_db:27017
@@ -330,6 +345,14 @@ services:
       # Circuit Breaker
       - CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
       - CIRCUIT_BREAKER_TIMEOUT=60
+
+      # Tracing
+      - TRACING_ENABLED=true
+      - SERVICE_NAME=celery_worker
+      - SERVICE_VERSION=1.0.0
+      - ENVIRONMENT=development
+      - OTLP_ENDPOINT=http://otel-collector:4317
+
     networks:
       - url_shortener_network
     depends_on:
@@ -358,9 +381,10 @@ services:
       --schedule=/tmp/celerybeat-schedule
       --pidfile=/tmp/celerybeat.pid
     volumes:
-      - .:/app
       - celery_beat_data:/tmp
     environment:
+      # Python Path
+      - PYTHONPATH=/app
       # Database Connections (via PgBouncer)
       - DB_HOST=pgbouncer
       - DB_PORT=6432
@@ -380,6 +404,13 @@ services:
       # Scheduling Config
       - KEY_POPULATION_SCHEDULE=300
       - CLEANUP_EXPIRED_SCHEDULE=86400
+
+      # Tracing
+      - TRACING_ENABLED=true
+      - SERVICE_NAME=celery_beat
+      - SERVICE_VERSION=1.0.0
+      - ENVIRONMENT=development
+      - OTLP_ENDPOINT=http://otel-collector:4317
     networks:
       - url_shortener_network
     depends_on:
@@ -412,11 +443,12 @@ services:
       --max_tasks=10000
       --persistent=True
       --db=/data/flower.db
-      
+
     volumes:
-      - .:/app
       - flower_data:/data
     environment:
+      # Python Path
+      - PYTHONPATH=/app
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=
@@ -424,6 +456,13 @@ services:
       - FLOWER_PERSISTENT=True
       - FLOWER_DB=/data/flower.db
       - FLOWER_UNAUTHENTICATED_API=true
+
+      # Tracing
+      - TRACING_ENABLED=true
+      - SERVICE_NAME=celery_flower
+      - SERVICE_VERSION=1.0.0
+      - ENVIRONMENT=development
+      - OTLP_ENDPOINT=http://otel-collector:4317
     networks:
       - url_shortener_network
     depends_on:
@@ -439,6 +478,7 @@ services:
 # ============================================
 networks:
   url_shortener_network:
+    name: url_shortener_scalable_url_shortener_network
     driver: bridge
 
 # ============================================

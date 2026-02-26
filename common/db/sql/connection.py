@@ -1,9 +1,11 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy.pool import NullPool, QueuePool
+from sqlalchemy.pool import NullPool
 from common.core.config import settings
 import logging
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
+SQLAlchemyInstrumentor().instrument()
 logger = logging.getLogger(__name__)
 
 DB_URL_ASYNC = f"postgresql+asyncpg://{settings.db_user}:{settings.db_password}@{settings.db_host}:{settings.db_port}/{settings.db_name}"
@@ -37,6 +39,7 @@ Base = declarative_base()
 
 async def get_db_async():
     """Dependency for FastAPI routes - ensures proper connection lifecycle."""
+
     session = AsyncSessionLocal()
     try:
         yield session

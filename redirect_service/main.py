@@ -2,20 +2,22 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from common.core.config import settings
 import uvicorn
-import logging
+from opentelemetry import trace
+from common.core.tracing import setup_tracing
+from common.utils.logger import initialize_logger
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Initialize structured logger with OpenTelemetry integration
+logger = initialize_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
-    logger.info("🚀 Starting Redirect service...")
+    logger.info("Starting Redirect service...")
+    setup_tracing(app)
     yield
     # Shutdown
-    logger.info("🛑 Shutting down Redirect service...")
+    logger.info("Shutting down Redirect service...")
 
 app = FastAPI(
     title="Redirect Service API",
@@ -25,7 +27,7 @@ app = FastAPI(
 )
 
 # Will be created later
-from redirect_service.routes.redirect import redirect_router
+from redirect_service.routes.redirect import redirect_router  # noqa: E402
 
 @app.get("/")
 async def root():
@@ -34,7 +36,11 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy"}
+    tracer = trace.get_tracer(__name__)
+    with tracer.start_as_current_span("health_check") as span:
+        span.set_attribute("service", "redirect_service")
+        span.set_attribute("status", "healthy")
+        return {"status": "healthy", "service": "redirect_service"}
 
 app.include_router(redirect_router)
 

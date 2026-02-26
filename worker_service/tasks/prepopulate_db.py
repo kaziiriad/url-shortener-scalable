@@ -5,6 +5,7 @@ from common.db.sql.connection import get_celery_db_session
 from common.db.sql.models import URL
 from common.db.sql.url_repository import URLKeyRepository
 from common.core.config import settings
+from opentelemetry import trace
 
 logger = logging.getLogger(__name__)
 
@@ -13,21 +14,21 @@ logger = logging.getLogger(__name__)
 #     """Pre-populate database with unused short URL keys."""
 #     if count is None:
 #         count = settings.key_population_count
-        
+#
 #     try:
 #         logger.info(f"Starting key pre-population with {count} keys")
-        
+#
 #         asyncio.run(_async_pre_populate_keys(count))
-        
+#
 #         logger.info(f"Successfully pre-populated {count} keys")
 #         return {"status": "success", "count": count}
-        
+#
 #     except Exception as exc:
 #         logger.error(f"Key pre-population failed: {exc}")
 #         # Retry with exponential backoff
 #         raise self.retry(
-#             exc=exc, 
-#             countdown=settings.task_retry_delay, 
+#             exc=exc,
+#             countdown=settings.task_retry_delay,
 #             max_retries=settings.task_max_retries
 #         )
 
@@ -59,23 +60,49 @@ logger = logging.getLogger(__name__)
 )
 async def pre_populate_keys(self, count: int = None):
     """Pre-populate database with unused short URL keys."""
-    if count is None:
-        count = settings.key_population_count
+    tracer = trace.get_tracer(__name__)
 
-    logger.info(f"Starting key pre-population with {count} keys")
+    with tracer.start_as_current_span("pre_populate_keys") as span:
+        span_ctx = span.get_span_context()
 
-    try:
-        async for session in get_celery_db_session():
-            inserted_count = await URLKeyRepository.pre_populate_keys(session, count)
+        if count is None:
+            count = settings.key_population_count
 
-            logger.info(f"Inserted {inserted_count} keys into the database")
+        span.set_attribute("key_count", count)
+        logger.info(
+            "Starting key pre-population",
+            extra={"span_context": span_ctx, "count": count}
+        )
 
-            return {
-                "status": "success",
-                "count": inserted_count,
-            }
-    except Exception as exc:
-        logger.error(f"Key pre-population failed: {exc}")
-        raise
+        try:
+            span.add_event("getting_db_session")
+            async for session in get_celery_db_session():
+                span.add_event("calling_repository_pre_populate")
+                inserted_count = await URLKeyRepository.pre_populate_keys(session, count)
+
+                span.set_attribute("inserted_count", inserted_count)
+                span.set_status(trace.Status(trace.StatusCode.OK))
+                logger.info(
+                    "Keys inserted successfully",
+                    extra={
+                        "span_context": span_ctx,
+                        "inserted_count": inserted_count,
+                        "trace_id": f"{span_ctx.trace_id:032x}",
+                        "span_id": f"{span_ctx.span_id:016x}"
+                    }
+                )
+
+                return {
+                    "status": "success",
+                    "count": inserted_count,
+                }
+        except Exception as exc:
+            span.set_status(trace.Status(trace.StatusCode.ERROR, str(exc)))
+            span.add_event("pre_population_failed", attributes={"error": str(exc)})
+            logger.error(
+                "Key pre-population failed",
+                extra={"span_context": span_ctx, "error": str(exc)}
+            )
+            raise
 
 

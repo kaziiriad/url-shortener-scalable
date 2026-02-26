@@ -1,0 +1,21 @@
+# Minimal working Tempo configuration for distributed tracing backend
+# Based on working configurations from otel-poridhi reference projects
+# TODO(human): Add retention policies and WAL configuration for production durability
+
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /tmp/tempo/traces

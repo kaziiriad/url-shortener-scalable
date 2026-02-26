@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     port: int = int(os.getenv("PORT", "8000"))
     testing: bool = bool(os.getenv("TESTING", "False").lower() in ("true", "1", "yes"))
     instance_id: Optional[str] = os.getenv("INSTANCE_ID", None)
+    service_name: str = os.getenv("SERVICE_NAME", "url_shortener")
+    service_version: str = os.getenv("SERVICE_VERSION", "1.0.0")
+    environment: str = os.getenv("ENVIRONMENT", "development")
     
     # Computed field - build base_url after host and port are set
     @property
@@ -66,9 +69,10 @@ class Settings(BaseSettings):
     create_url_rate_limit: str = os.getenv("CREATE_URL_RATE_LIMIT", "10/minute")
     redirect_rate_limit: str = os.getenv("REDIRECT_RATE_LIMIT", "10/minute")
 
+    # Tracing
+    otlp_endpoint: str = os.getenv("OTLP_ENDPOINT", "http://otel-collector:4317")
+    tracing_enabled: bool = bool(os.getenv("TRACING_ENABLED", "True").lower() in ("true", "1", "yes"))
     
-
-
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
