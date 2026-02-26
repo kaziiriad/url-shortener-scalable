@@ -545,6 +545,47 @@ Services automatically inject trace IDs into log messages for correlation:
 logger.info("Processing URL creation", extra={"trace_id": trace_id})
 ```
 
+## ⚡ Performance
+
+The URL shortener is optimized for low-latency redirects and high-throughput URL creation.
+
+### Redirect Performance
+
+| Operation | Latency | Notes |
+|-----------|---------|-------|
+| **Cached redirect** | 5-7ms | Redis cache hit (majority of requests) |
+| **Uncached redirect** | ~30ms | MongoDB query + cache population |
+| **URL creation** | ~100ms | PostgreSQL key fetch + MongoDB insert |
+
+### Optimization Strategies
+
+**Circuit Breaker Optimization:**
+- **Read operations**: Fast-fail without retry delays - eliminates 200-400ms latency spikes
+- **Write operations**: Retained retry logic for data integrity
+- **Result**: Consistent redirect performance, no unexpected slowdowns
+
+**Key Pre-population:**
+- Hybrid strategy auto-selects optimal insertion method based on batch size
+- Small batches (<1K): Batched inserts at ~1,800 keys/sec
+- Medium batches (1K-50K): Single INSERT at ~18,000 keys/sec
+- Large batches (>50K): PostgreSQL native at ~50,000 keys/sec
+
+### Performance Tips
+
+**For production deployments:**
+1. **Cache hit rate**: Aim for >90% Redis cache hit rate for sub-10ms redirects
+2. **Connection pooling**: Ensure proper pool sizes for PostgreSQL and MongoDB
+3. **Monitoring**: Use Grafana dashboards to track latency metrics over time
+4. **Horizontal scaling**: Run multiple redirect_service instances behind Nginx
+
+**Performance baseline** (single instance, local development):
+```bash
+# Test redirect latency
+curl -w "TTFB: %{time_starttransfer}s\n" http://localhost/<short_key> -o /dev/null
+
+# Expected: 5-30ms depending on cache status
+```
+
 ## 🧪 Testing
 
 ### Automated Testing

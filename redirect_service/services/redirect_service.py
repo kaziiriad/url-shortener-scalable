@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from common.core.redis_client import RedisClient
-from common.utils.circuit_breaker import with_retry, with_circuit_breaker, mongo_circuit_breaker
+from common.utils.circuit_breaker import with_circuit_breaker, mongo_circuit_breaker
 from opentelemetry import trace
 import logging
 import json
@@ -10,11 +10,11 @@ logger = logging.getLogger(__name__)
 class RedirectService:
 
     @staticmethod
-    @with_retry(max_retries=2, delay=0.2)
     @with_circuit_breaker(mongo_circuit_breaker)
     async def _find_url_in_mongo(mongo_db, short_url_id: str):
         """
-        Finds a URL in MongoDB, protected by a retry and circuit breaker.
+        Finds a URL in MongoDB with circuit breaker protection.
+        Note: No retry logic for reads - fail fast for better redirect performance.
         """
         tracer = trace.get_tracer(__name__)
         with tracer.start_as_current_span("_find_url_in_mongo") as span:
