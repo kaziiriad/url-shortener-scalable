@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
     retry_jitter=True,
 )
 async def pre_populate_keys(self, count: int = None):
-    """Pre-populate database with unused short URL keys."""
+    """Pre-populate database with unused short URL keys using optimized hybrid strategy."""
     tracer = trace.get_tracer(__name__)
 
     with tracer.start_as_current_span("pre_populate_keys") as span:
@@ -70,20 +70,21 @@ async def pre_populate_keys(self, count: int = None):
 
         span.set_attribute("key_count", count)
         logger.info(
-            "Starting key pre-population",
+            "Starting key pre-population with hybrid strategy",
             extra={"span_context": span_ctx, "count": count}
         )
 
         try:
             span.add_event("getting_db_session")
             async for session in get_celery_db_session():
-                span.add_event("calling_repository_pre_populate")
-                inserted_count = await URLKeyRepository.pre_populate_keys(session, count)
+                span.add_event("calling_repository_pre_populate_hybrid")
+                # Use the optimized hybrid approach that auto-selects the best strategy
+                inserted_count = await URLKeyRepository.pre_populate_keys_hybrid(session, count)
 
                 span.set_attribute("inserted_count", inserted_count)
                 span.set_status(trace.Status(trace.StatusCode.OK))
                 logger.info(
-                    "Keys inserted successfully",
+                    "Keys inserted successfully using hybrid strategy",
                     extra={
                         "span_context": span_ctx,
                         "inserted_count": inserted_count,
