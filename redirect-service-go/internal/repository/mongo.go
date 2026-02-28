@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -45,19 +46,15 @@ func (m *MongoRepository) FindURLByShortKey(ctx context.Context, shortKey string
 	err := result.Decode(&newDoc)
 
 	if err == mongo.ErrNoDocuments {
-		// DEBUG: Log when document not found
-		println("DEBUG: Document not found for key:", shortKey)
 		return nil, mongo.ErrNoDocuments
 	}
 
 	if err != nil {
-		// DEBUG: Log decode errors
-		println("DEBUG: Decode error for key", shortKey, ":", err.Error())
+		log.Printf("MongoDB decode error for key %s: %v", shortKey, err)
 		return nil, err
 	}
 
-	// DEBUG: Log success
-	println("DEBUG: Found document for key:", shortKey, "URL:", newDoc.LongURL)
+	log.Printf("MongoDB hit: key=%s", shortKey)
 	return &newDoc, nil
 
 }

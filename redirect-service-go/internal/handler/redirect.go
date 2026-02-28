@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"redirect-service-go/internal/service"
@@ -42,28 +43,34 @@ func (h *RedirectHandler) HealthHandler(w http.ResponseWriter, r *http.Request) 
 func (h *RedirectHandler) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 
 	shortKey := chi.URLParam(r, "shortKey")
+	log.Printf("Request: method=%s path=%s key=%s", r.Method, r.URL.Path, shortKey)
 
 	longUrl, err := h.service.GetLongURL(r.Context(), shortKey)
 
 	if err != nil {
 		if err.Error() == "circuit breaker open" {
+			log.Printf("Response: key=%s status=503 circuit_breaker_open", shortKey)
 			http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		if err.Error() == "key not found" {
+			log.Printf("Response: key=%s status=404 not_found", shortKey)
 			http.Error(w, "URL not found", http.StatusNotFound)
 			return
 		}
 
+		log.Printf("Response: key=%s status=500 error=%v", shortKey, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	if longUrl == "" {
+		log.Printf("Response: key=%s status=404 expired", shortKey)
 		http.Error(w, "URL not found", http.StatusNotFound)
 		return
 	}
 
+	log.Printf("Response: key=%s status=301 redirect=%s", shortKey, longUrl)
 	http.Redirect(w, r, longUrl, http.StatusMovedPermanently)
 
 }

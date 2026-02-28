@@ -325,12 +325,56 @@ The Nginx configuration file `nginx-decoupled.conf` contains the detailed config
     # In terminal 1
     uv run create_service.main:app --port 8000 --reload
 
-    # In terminal 2
+    # In terminal 2 (Python redirect service)
     uv run redirect_service.main:app --port 8001 --reload
+
+    # OR terminal 2 (Go redirect service - alternative)
+    cd redirect-service-go
+    go run cmd/server/main.go
 
     # In terminal 3
     uv run celery -A worker_service.celery_app:celery_app worker --loglevel=info
     ```
+
+### Go Redirect Service
+
+The project includes an alternative Go implementation of the redirect service with the following features:
+
+**Technology Stack:**
+- **Chi Router**: Lightweight, fast HTTP router
+- **mongo-driver v2**: Official MongoDB driver for Go
+- **go-redis v9**: Redis client with connection pooling
+- **Circuit Breaker**: Custom implementation for failure protection
+
+**Architecture:**
+```
+redirect-service-go/
+├── cmd/server/main.go       # Entry point with graceful shutdown
+├── internal/
+│   ├── config/              # Environment-based configuration
+│   ├── handler/             # HTTP handlers with request logging
+│   ├── service/             # Business logic with cache-aside pattern
+│   ├── repository/          # Data access layer (MongoDB, Redis)
+│   └── utils/               # Circuit breaker implementation
+```
+
+**Running the Go service:**
+```bash
+cd redirect-service-go
+go run cmd/server/main.go
+```
+
+**Performance:**
+- Cache hit: ~0.9ms (Redis only)
+- Cache miss: ~1ms (MongoDB query + Redis cache)
+- Sub-1ms latency for cached redirects
+
+**Features:**
+- Structured logging for observability
+- Graceful shutdown with timeout handling
+- Circuit breaker pattern for MongoDB failure protection
+- Cache-aside pattern with 30-minute TTL
+- Context-aware request handling
 
 ## 🔧 Configuration
 
@@ -418,6 +462,7 @@ curl "http://localhost/health"
 |---|---|---|
 | **create_service** | 8000 | FastAPI service for creating URLs |
 | **redirect_service** | 8001 | FastAPI service for redirecting URLs |
+| **redirect-service-go** | 8001 | (Alternative) Go implementation using Chi router |
 | **celery_worker** | - | Background task processor |
 | **celery_beat** | - | Periodic task scheduler |
 | **celery_flower** | 5555 | Task monitoring dashboard |
@@ -479,10 +524,20 @@ url_shortener_scalable/
 │   ├── routes/
 │   ├── services/
 │   └── Dockerfile
-├── redirect_service/      # Service for redirecting short URLs
+├── redirect_service/      # Service for redirecting short URLs (FastAPI)
 │   ├── routes/
 │   ├── services/
 │   └── Dockerfile
+├── redirect-service-go/   # Go implementation of redirect service
+│   ├── cmd/server/        # Application entry point
+│   ├── internal/
+│   │   ├── config/        # Environment configuration
+│   │   ├── handler/       # HTTP handlers (Chi router)
+│   │   ├── service/       # Business logic layer
+│   │   ├── repository/    # Data access (MongoDB, Redis)
+│   │   └── utils/         # Circuit breaker implementation
+│   ├── go.mod
+│   └── .gitignore
 ├── worker_service/        # Celery worker for background tasks
 │   ├── tasks/
 │   └── Dockerfile
