@@ -18,7 +18,6 @@ services:
       - url_shortener_network
     depends_on:
       - create_service
-      - redirect_service
       - celery_flower
     restart: unless-stopped
     healthcheck:
@@ -117,16 +116,16 @@ services:
       - PORT=8001
       - BASE_URL=http://localhost
       - TESTING=false
-      
+
       # MongoDB Config
       - MONGO_URI=mongodb://mongo_db:27017
       - MONGO_DB_NAME=url_shortener
-      
+
       # Redis Config
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=
-      
+
       # Circuit Breaker & Retry Config
       - CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
       - CIRCUIT_BREAKER_TIMEOUT=60
@@ -155,6 +154,55 @@ services:
     labels:
       com.url-shortener.service: "redirect"
       com.url-shortener.description: "FastAPI redirect service"
+    profiles:
+      - python
+
+  # Alternative Go redirect service (comment out python redirect_service to use this)
+  redirect_service_go:
+    build:
+      context: ./redirect-service-go
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    expose:
+      - "8001"
+    environment:
+      # Application Config
+      - PORT=8001
+      - SERVICE_NAME=redirect_service_go
+      - ENVIRONMENT=development
+
+      # MongoDB Config
+      - MONGO_URI=mongodb://mongo_db:27017
+      - MONGO_DB_NAME=url_shortener
+
+      # Redis Config
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_MAX_CONNECTIONS=10
+
+      # OpenTelemetry (optional - not yet implemented)
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - TRACING_ENABLED=false
+    networks:
+      - url_shortener_network
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongo_db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8001/health || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    labels:
+      com.url-shortener.service: "redirect"
+      com.url-shortener.description: "Go redirect service"
+    profiles:
+      - go
 
   # ============================================
   # CACHE LAYER (Redis)

@@ -21,9 +21,9 @@ type Config struct {
 }
 
 func LoadConfig() (*Config, error) {
-	if err := godotenv.Load("../.env"); err != nil {
-		return nil, err
-	}
+	// Try to load .env file, but don't fail if it doesn't exist
+	// In Docker, environment variables are passed directly
+	_ = godotenv.Load()
 
 	return &Config{
 		Port:               getInt("PORT", 8001),
