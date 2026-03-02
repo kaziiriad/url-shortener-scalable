@@ -16,30 +16,31 @@ url_router = APIRouter()
 async def create_url(url: URLCreate, session: AsyncSession = Depends(get_db_async), mongo_db = Depends(get_db)):
 
     tracer = trace.get_tracer(__name__)
-    with tracer.start_as_current_span("create_url_api") as span:
+    span_name = "create_url_api"
+    with tracer.start_as_current_span(span_name) as span:
         span_ctx = span.get_span_context()
         try:
             # Use the URLService classmethod directly
             span.add_event("URL service called")
             url_data = await URLService.store_url(session=session, mongo_db=mongo_db, url=url)
             span.add_event("URL service returned")
-        
+
             # Store URL mapping in Redis for fast retrieval
             span.add_event("Redis client initialized")
             redis_client = RedisClient()
             span.add_event("Redis client set")
             await redis_client.set(url_data.short_url_id, url_data.model_dump_json(), expires_in=1800)
             span.add_event("Redis client set completed")
-            
+
             span.set_status(trace.Status(trace.StatusCode.OK))
             logger.info(
                 "URL created successfully",
                 extra={
                     "trace_id": format(span_ctx.trace_id, "032x"),
                     "span_id": format(span_ctx.span_id, "016x"),
-                    "span_name": span.name,
-                    "span_kind": span.kind,
-                    "span_status": span.status,
+                    "span_name": span_name,
+                    "span_kind": getattr(span, "kind", "INTERNAL"),
+                    "span_status": getattr(span, "status", None),
                 }
             )
             return {
@@ -55,9 +56,9 @@ async def create_url(url: URLCreate, session: AsyncSession = Depends(get_db_asyn
                 extra={
                     "trace_id": format(span_ctx.trace_id, "032x"),
                     "span_id": format(span_ctx.span_id, "016x"),
-                    "span_name": span.name,
-                    "span_kind": span.kind,
-                    "span_status": span.status,
+                    "span_name": span_name,
+                    "span_kind": getattr(span, "kind", "INTERNAL"),
+                    "span_status": getattr(span, "status", None),
                 }
             )
             raise http_exc
@@ -68,9 +69,9 @@ async def create_url(url: URLCreate, session: AsyncSession = Depends(get_db_asyn
                 extra={
                     "trace_id": format(span_ctx.trace_id, "032x"),
                     "span_id": format(span_ctx.span_id, "016x"),
-                    "span_name": span.name,
-                    "span_kind": span.kind,
-                    "span_status": span.status,
+                    "span_name": span_name,
+                    "span_kind": getattr(span, "kind", "INTERNAL"),
+                    "span_status": getattr(span, "status", None),
                 }
             )
             raise HTTPException(status_code=500, detail=f"Error creating URL via API: {str(e)}")
