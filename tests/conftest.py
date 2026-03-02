@@ -41,41 +41,81 @@ def fake_redis():
     """Fake Redis client for testing"""
     return fakeredis.aioredis.FakeRedis(decode_responses=True)
 
+@pytest.fixture
+def redis_client(fake_redis):
+    """RedisClient wrapper with fake redis backend"""
+    from common.core.redis_client import RedisClient
+
+    class TestRedisClient:
+        def __init__(self, fake_redis):
+            self._fake_redis = fake_redis
+
+        async def set(self, key: str, value: str, expires_in: int = None) -> None:
+            await self._fake_redis.set(key, value, ex=expires_in)
+
+        async def get(self, key: str) -> str | None:
+            return await self._fake_redis.get(key)
+
+        async def delete(self, key: str) -> None:
+            await self._fake_redis.delete(key)
+
+        async def close(self) -> None:
+            pass
+
+        async def ping(self) -> bool:
+            return True
+
+    return TestRedisClient(fake_redis)
+
 # --- MongoDB (mongomock) ---
+
+# Module-level shared MongoDB database for tests
+_shared_mongo_db = None
+
+
+def get_async_mongo_db():
+    """Get or create the shared async MongoDB database"""
+    global _shared_mongo_db
+
+    if _shared_mongo_db is None:
+        # Async wrapper for mongomock collections
+        class AsyncCollection:
+            def __init__(self, collection):
+                self._collection = collection
+
+            async def insert_one(self, doc):
+                return self._collection.insert_one(doc)
+
+            async def find_one(self, query):
+                return self._collection.find_one(query)
+
+            async def delete_one(self, query):
+                return self._collection.delete_one(query)
+
+            async def update_one(self, query, update, **kwargs):
+                return self._collection.update_one(query, update, **kwargs)
+
+            async def find(self, query=None):
+                return self._collection.find(query)
+
+        class AsyncDatabase:
+            def __init__(self, db):
+                self._db = db
+
+            def __getattr__(self, name):
+                return AsyncCollection(self._db[name])
+
+        # Create mongomock client and wrap it
+        client = mongomock.MongoClient()
+        _shared_mongo_db = AsyncDatabase(client.test_db)
+
+    return _shared_mongo_db
+
+
 @pytest.fixture
 def fake_mongo():
     """Fake MongoDB client with async wrappers for testing"""
-
-    # Async wrapper for mongomock collections
-    class AsyncCollection:
-        def __init__(self, collection):
-            self._collection = collection
-
-        async def insert_one(self, doc):
-            return self._collection.insert_one(doc)
-
-        async def find_one(self, query):
-            return self._collection.find_one(query)
-
-        async def delete_one(self, query):
-            return self._collection.delete_one(query)
-
-        async def update_one(self, query, update, **kwargs):
-            return self._collection.update_one(query, update, **kwargs)
-
-        async def find(self, query=None):
-            return self._collection.find(query)
-
-    class AsyncDatabase:
-        def __init__(self, db):
-            self._db = db
-
-        def __getattr__(self, name):
-            return AsyncCollection(self._db[name])
-
-    # Create mongomock client and wrap it
-    client = mongomock.MongoClient()
-    return AsyncDatabase(client.test_db)
+    return get_async_mongo_db()
 
 # --- PostgreSQL (SQLite in-memory) ---
 @pytest_asyncio.fixture
@@ -104,6 +144,9 @@ async def test_db_session():
 # ============================================
 # FastAPI Test Client
 # ============================================
+
+# Import RedisClient for dependency overrides
+from common.core.redis_client import RedisClient
 
 @pytest_asyncio.fixture
 async def client(monkeypatch, fake_redis):
@@ -182,6 +225,34 @@ async def client(monkeypatch, fake_redis):
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest_asyncio.fixture
+async def client_redirect(redis_client):
+    """Async HTTP test client for redirect service with mocked databases"""
+    from common.core.config import settings
+    settings.testing = True
+
+    from redirect_service.main import app as redirect_app
+    from common.db.nosql.connection import get_db
+
+    # Use the shared MongoDB database
+    test_mongo_db = get_async_mongo_db()
+
+    async def override_get_db():
+        return test_mongo_db
+
+    async def override_redis_client():
+        return redis_client
+
+    redirect_app.dependency_overrides[get_db] = override_get_db
+    redirect_app.dependency_overrides[RedisClient] = override_redis_client
+
+    async with AsyncClient(transport=ASGITransport(app=redirect_app), base_url="http://test") as c:
+        yield c
+
+    # Clean up dependency overrides
+    redirect_app.dependency_overrides = {}
 
 # ============================================
 # Test Data Fixtures
