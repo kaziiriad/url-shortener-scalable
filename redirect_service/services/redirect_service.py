@@ -81,9 +81,14 @@ class RedirectService:
                     long_url = url_data.get("long_url")
 
                     # Check expiration in DB
-                    expires_at_str = url_data.get("expires_at")
-                    if expires_at_str:
-                        expires_at = datetime.fromisoformat(expires_at_str)
+                    expires_at = url_data.get("expires_at")
+                    if expires_at:
+                        # Handle both datetime objects and ISO strings
+                        if isinstance(expires_at, str):
+                            expires_at = datetime.fromisoformat(expires_at)
+                        # Ensure datetime has timezone info
+                        if expires_at.tzinfo is None:
+                            expires_at = expires_at.replace(tzinfo=timezone.utc)
                         if expires_at < datetime.now(timezone.utc):
                             span.add_event("url_expired_in_db", attributes={"short_key": short_key})
                             logger.info(

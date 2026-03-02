@@ -36,36 +36,56 @@ def test_config():
 # ============================================
 
 # --- Redis (fakeredis) ---
+
+# Module-level shared Redis client for tests
+_shared_fake_redis = None
+_shared_redis_client = None
+
+
+def get_shared_redis_client():
+    """Get or create the shared Redis client for testing"""
+    global _shared_fake_redis, _shared_redis_client
+
+    if _shared_redis_client is None:
+        from common.core.redis_client import RedisClient
+
+        # Create the shared fake redis instance
+        _shared_fake_redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+
+        class TestRedisClient:
+            def __init__(self, fake_redis):
+                self._fake_redis = fake_redis
+
+            async def set(self, key: str, value: str, expires_in: int = None) -> None:
+                await self._fake_redis.set(key, value, ex=expires_in)
+
+            async def get(self, key: str) -> str | None:
+                return await self._fake_redis.get(key)
+
+            async def delete(self, key: str) -> None:
+                await self._fake_redis.delete(key)
+
+            async def close(self) -> None:
+                pass
+
+            async def ping(self) -> bool:
+                return True
+
+        _shared_redis_client = TestRedisClient(_shared_fake_redis)
+
+    return _shared_redis_client
+
+
 @pytest.fixture
 def fake_redis():
-    """Fake Redis client for testing"""
-    return fakeredis.aioredis.FakeRedis(decode_responses=True)
+    """Fake Redis client for testing (deprecated, use redis_client)"""
+    return get_shared_redis_client()._fake_redis
+
 
 @pytest.fixture
-def redis_client(fake_redis):
-    """RedisClient wrapper with fake redis backend"""
-    from common.core.redis_client import RedisClient
-
-    class TestRedisClient:
-        def __init__(self, fake_redis):
-            self._fake_redis = fake_redis
-
-        async def set(self, key: str, value: str, expires_in: int = None) -> None:
-            await self._fake_redis.set(key, value, ex=expires_in)
-
-        async def get(self, key: str) -> str | None:
-            return await self._fake_redis.get(key)
-
-        async def delete(self, key: str) -> None:
-            await self._fake_redis.delete(key)
-
-        async def close(self) -> None:
-            pass
-
-        async def ping(self) -> bool:
-            return True
-
-    return TestRedisClient(fake_redis)
+def redis_client():
+    """RedisClient wrapper with fake redis backend - shared across tests"""
+    return get_shared_redis_client()
 
 # --- MongoDB (mongomock) ---
 
@@ -149,7 +169,7 @@ async def test_db_session():
 from common.core.redis_client import RedisClient
 
 @pytest_asyncio.fixture
-async def client(monkeypatch, fake_redis):
+async def client(monkeypatch, redis_client):
     """Async HTTP test client with mocked databases"""
     from common.core.config import settings
     settings.testing = True
@@ -181,50 +201,27 @@ async def client(monkeypatch, fake_redis):
 
     fastapi_app.dependency_overrides[get_db_async] = override_get_db_async
 
-    # Override MongoDB dependency with async wrapper
-    # Create async wrapper for mongomock collections
-    class AsyncCollection:
-        def __init__(self, collection):
-            self._collection = collection
-
-        async def insert_one(self, doc):
-            return self._collection.insert_one(doc)
-
-        async def find_one(self, query):
-            return self._collection.find_one(query)
-
-        async def delete_one(self, query):
-            return self._collection.delete_one(query)
-
-        async def update_one(self, query, update, **kwargs):
-            return self._collection.update_one(query, update, **kwargs)
-
-        async def find(self, query=None):
-            return self._collection.find(query)
-
-    class AsyncDatabase:
-        def __init__(self, db):
-            self._db = db
-
-        def __getattr__(self, name):
-            return AsyncCollection(self._db[name])
-
-    mongo_client = mongomock.MongoClient()
-    test_mongo_db = AsyncDatabase(mongo_client.test_db)
+    # Use the shared MongoDB database (same as client_redirect)
+    test_mongo_db = get_async_mongo_db()
 
     async def override_get_db():
         return test_mongo_db
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
 
-    # Override Redis client
-    monkeypatch.setattr("common.core.redis_client.RedisClient", lambda: fake_redis)
+    async def override_redis_client():
+        return redis_client
+
+    fastapi_app.dependency_overrides[RedisClient] = override_redis_client
 
     async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://test") as c:
         yield c
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+
+    # Clean up dependency overrides
+    fastapi_app.dependency_overrides = {}
 
 
 @pytest_asyncio.fixture
