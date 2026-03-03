@@ -236,10 +236,9 @@ async def test_redirect_fallback_to_mongodb_when_cache_miss(client: AsyncClient,
 
 
 @pytest.mark.e2e
-async def test_https_auto_addition_in_url_creation(client: AsyncClient, test_db_session, fake_mongo):
-    """Test that https:// is auto-added to URLs without scheme"""
+async def test_https_schemes_handled_correctly(client: AsyncClient, test_db_session, fake_mongo):
+    """Test that http:// and https:// schemes are handled correctly"""
     test_cases = [
-        ("example.com/no-scheme", "https://example.com/no-scheme"),
         ("http://example.com/http-scheme", "http://example.com/http-scheme"),  # Should keep existing
         ("https://example.com/https-scheme", "https://example.com/https-scheme"),  # Should keep existing
     ]

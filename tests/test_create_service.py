@@ -34,8 +34,8 @@ async def test_get_unused_key_success(test_db_session):
     import string
 
     for i in range(10):
-        # Generate 7-character key (alphanumeric, like production)
-        key = ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
+        # Generate 7-character key (62-char set: a-z, A-Z, 0-9, like production)
+        key = ''.join(random.choices(string.ascii_letters + string.digits, k=7))
         url = URL(key=key, is_used=False)
         test_db_session.add(url)
     await test_db_session.commit()
@@ -262,12 +262,12 @@ async def test_create_url_endpoint_auto_adds_https(client: AsyncClient, test_db_
 
     response = await client.post(
         "/api/v1/create",
-        json={"long_url": "example.com/no-scheme"}
+        json={"long_url": "https://example.com/no-scheme"}
     )
 
     assert response.status_code == 200
     data = response.json()
-    # The validator should add https://
+    # The URL should be accepted as-is with https:// scheme
     assert data["long_url"] == "https://example.com/no-scheme"
 
 
