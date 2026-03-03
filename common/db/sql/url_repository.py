@@ -43,14 +43,18 @@ class URLKeyRepository:
                 if url is not None:
                     # Mark the key as used
                     span.add_event("get_unused_key_marking_key_as_used")
+                    # Access key before commit to avoid lazy loading issues
+                    key_value = url.key
                     await session.execute(
                         update(URL)
                         .where(URL.id == url.id)
                         .values(is_used=True)
                     )
                     await session.commit()
+                    # Refresh to ensure attributes are loaded after commit
+                    await session.refresh(url)
                     span.add_event("get_unused_key_marking_key_as_used_completed")
-                    logger.info(f"Acquired key: {url.key}")
+                    logger.info(f"Acquired key: {key_value}")
                     return url
 
                 else:

@@ -34,11 +34,17 @@ class CircuitBreaker:
         """Record a failed operation."""
         self.failures += 1
         self.last_failure_time = datetime.now()
-        
+
         if self.failures >= self.failure_threshold:
             self.state = "open"
             logger.error(f"Circuit breaker opened after {self.failures} failures")
-            
+
+    def reset(self):
+        """Reset the circuit breaker to closed state (for testing)."""
+        self.failures = 0
+        self.last_failure_time = None
+        self.state = "closed"
+
     def can_execute(self) -> bool:
         """Check if operation can be executed."""
         if self.state == "closed":

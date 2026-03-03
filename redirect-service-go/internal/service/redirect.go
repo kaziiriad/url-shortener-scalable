@@ -12,10 +12,17 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
+// Error definitions
+var (
+	ErrKeyNotFound         = errors.New("key not found")
+	ErrCircuitBreakerOpen  = errors.New("circuit breaker open")
+	ErrInternal            = errors.New("internal error")
+)
+
 type RedirectService struct {
-	redisRepo *repository.RedisRepository
-	mongoRepo *repository.MongoRepository
-	cb        *utils.CircuitBreaker
+	RedisRepo *repository.RedisRepository
+	MongoRepo *repository.MongoRepository
+	CB        *utils.CircuitBreaker
 }
 
 func NewRedirectService(
@@ -24,9 +31,9 @@ func NewRedirectService(
 ) *RedirectService {
 
 	return &RedirectService{
-		redisRepo: redisRepo,
-		mongoRepo: mongoRepo,
-		cb:        utils.NewCircuitBreaker(5, 60*time.Second),
+		RedisRepo: redisRepo,
+		MongoRepo: mongoRepo,
+		CB:        utils.NewCircuitBreaker(5, 60*time.Second),
 	}
 }
 
@@ -34,7 +41,7 @@ func (s *RedirectService) GetLongURL(ctx context.Context, shortKey string) (stri
 	log.Printf("Lookup: key=%s", shortKey)
 
 	// check redis cache
-	if cached, err := s.redisRepo.Get(ctx, shortKey); err == nil && cached != "" {
+	if cached, err := s.RedisRepo.Get(ctx, shortKey); err == nil && cached != "" {
 		var urlDoc repository.URLDoc
 		if err := json.Unmarshal([]byte(cached), &urlDoc); err != nil {
 			log.Printf("Cache unmarshal error: key=%s error=%v", shortKey, err)
@@ -44,7 +51,7 @@ func (s *RedirectService) GetLongURL(ctx context.Context, shortKey string) (stri
 		// check expiration
 		if isExpired(urlDoc.ExpiresAt) {
 			log.Printf("Cache expired: key=%s", shortKey)
-			s.redisRepo.Delete(ctx, shortKey)
+			s.RedisRepo.Delete(ctx, shortKey)
 			return "", nil
 		}
 
@@ -55,22 +62,22 @@ func (s *RedirectService) GetLongURL(ctx context.Context, shortKey string) (stri
 	log.Printf("Cache miss: key=%s", shortKey)
 
 	// retrieve from mongodb with circuit breaker
-	if !s.cb.CanExecute() {
+	if !s.CB.CanExecute() {
 		log.Printf("Circuit breaker open: key=%s", shortKey)
-		return "", errors.New("circuit breaker open")
+		return "", ErrCircuitBreakerOpen
 	}
 
-	urlDoc, err := s.mongoRepo.FindURLByShortKey(ctx, shortKey)
+	urlDoc, err := s.MongoRepo.FindURLByShortKey(ctx, shortKey)
 	if err == mongo.ErrNoDocuments {
 		log.Printf("URL not found in DB: key=%s", shortKey)
-		return "", errors.New("key not found")
+		return "", ErrKeyNotFound
 	}
 
 	if err != nil {
-		s.cb.RecordFailure()
+		s.CB.RecordFailure()
 		return "", err
 	}
-	s.cb.RecordSuccess()
+	s.CB.RecordSuccess()
 
 	// check db expiration
 	if keyExpired := isExpired(urlDoc.ExpiresAt); keyExpired {
@@ -83,7 +90,7 @@ func (s *RedirectService) GetLongURL(ctx context.Context, shortKey string) (stri
 	if err != nil {
 		return "", err
 	}
-	s.redisRepo.Set(ctx, shortKey, string(urlJSON), 30*time.Minute)
+	s.RedisRepo.Set(ctx, shortKey, string(urlJSON), 30*time.Minute)
 	log.Printf("Cached: key=%s url=%s", shortKey, urlDoc.LongURL)
 	return urlDoc.LongURL, nil
 }

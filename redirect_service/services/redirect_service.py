@@ -38,9 +38,18 @@ class RedirectService:
             span.set_attribute("short_key", short_key)
 
             try:
-                # 1. Try Redis first
+                # 1. Try Redis first (with error handling for cache failures)
                 span.add_event("redis_get_called", attributes={"short_key": short_key})
-                cached_data = await redis_client.get(short_key)
+                try:
+                    cached_data = await redis_client.get(short_key)
+                except Exception as redis_error:
+                    # Redis unavailable - fall back to MongoDB
+                    span.add_event("redis_get_failed", attributes={"error": str(redis_error)})
+                    logger.warning(
+                        "Redis unavailable, falling back to MongoDB",
+                        extra={"span_context": span_ctx, "short_key": short_key, "error": str(redis_error)}
+                    )
+                    cached_data = None
 
                 if cached_data:
                     span.add_event("redis_cache_hit", attributes={"short_key": short_key})
@@ -52,7 +61,15 @@ class RedirectService:
                         span.add_event("expiration_check", attributes={"expires_at": expires_at_str})
                         expires_at = datetime.fromisoformat(expires_at_str)
                         if expires_at < datetime.now(timezone.utc):
-                            await redis_client.delete(short_key)
+                            try:
+                                await redis_client.delete(short_key)
+                            except Exception as redis_error:
+                                # Redis unavailable - log warning but continue
+                                span.add_event("redis_delete_failed", attributes={"error": str(redis_error)})
+                                logger.warning(
+                                    "Failed to delete expired URL from Redis",
+                                    extra={"span_context": span_ctx, "short_key": short_key, "error": str(redis_error)}
+                                )
                             span.add_event("url_expired", attributes={"short_key": short_key})
                             logger.info(
                                 "Expired URL removed from cache",
@@ -81,9 +98,14 @@ class RedirectService:
                     long_url = url_data.get("long_url")
 
                     # Check expiration in DB
-                    expires_at_str = url_data.get("expires_at")
-                    if expires_at_str:
-                        expires_at = datetime.fromisoformat(expires_at_str)
+                    expires_at = url_data.get("expires_at")
+                    if expires_at:
+                        # Handle both datetime objects and ISO strings
+                        if isinstance(expires_at, str):
+                            expires_at = datetime.fromisoformat(expires_at)
+                        # Ensure datetime has timezone info
+                        if expires_at.tzinfo is None:
+                            expires_at = expires_at.replace(tzinfo=timezone.utc)
                         if expires_at < datetime.now(timezone.utc):
                             span.add_event("url_expired_in_db", attributes={"short_key": short_key})
                             logger.info(
@@ -92,12 +114,20 @@ class RedirectService:
                             )
                             return None
 
-                    # 3. Cache the result in Redis for next time
+                    # 3. Cache the result in Redis for next time (with error handling)
                     # Convert ObjectId to string for JSON serialization
                     url_data['_id'] = str(url_data['_id'])
                     span.add_event("redis_set_called", attributes={"short_key": short_key})
-                    await redis_client.set(short_key, json.dumps(url_data, default=str), expires_in=1800)  # 30 min cache
-                    span.add_event("redis_cache_updated", attributes={"short_key": short_key})
+                    try:
+                        await redis_client.set(short_key, json.dumps(url_data, default=str), expires_in=1800)  # 30 min cache
+                        span.add_event("redis_cache_updated", attributes={"short_key": short_key})
+                    except Exception as redis_error:
+                        # Redis unavailable - log warning but don't fail the request
+                        span.add_event("redis_set_failed", attributes={"error": str(redis_error)})
+                        logger.warning(
+                            "Failed to cache URL in Redis (MongoDB fallback worked)",
+                            extra={"span_context": span_ctx, "short_key": short_key, "error": str(redis_error)}
+                        )
 
                     logger.info(
                         "DB hit - cached and returning",

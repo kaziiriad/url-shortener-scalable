@@ -4,12 +4,17 @@ from common.db.sql.url_repository import URLKeyRepository
 from fastapi import HTTPException
 import logging
 import json
+import asyncio
 from common.db.sql.connection import AsyncSessionLocal
 from common.utils.circuit_breaker import with_retry, with_circuit_breaker, postgres_circuit_breaker, mongo_circuit_breaker
 from common.core.redis_client import RedisClient
 from opentelemetry import trace
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
+
+# Advisory lock key for key pre-population (prevents thundering herd)
+_KEY_POPULATE_LOCK_ID = 54321  # Arbitrary unique ID for this lock
 
 class URLService:
 
@@ -59,6 +64,31 @@ class URLService:
         """
         await mongo_db.urls.delete_one({"short_url_id": short_url_id})
 
+    @staticmethod
+    async def _try_advisory_lock(session: AsyncSessionLocal) -> bool:
+        """
+        Attempt to acquire a PostgreSQL advisory lock for key pre-population.
+
+        Only one transaction will acquire the lock, preventing the thundering herd
+        problem where multiple concurrent requests all trigger pre-population.
+
+        Returns:
+            bool: True if lock was acquired, False otherwise
+            For SQLite (which doesn't support advisory locks), returns True
+            to allow normal operation without the lock optimization.
+        """
+        try:
+            result = await session.execute(
+                text(f"SELECT pg_try_advisory_xact_lock({_KEY_POPULATE_LOCK_ID})")
+            )
+            lock_acquired = result.scalar()
+            return lock_acquired
+        except Exception as e:
+            # SQLite doesn't support advisory locks - that's okay for tests
+            # Return True to proceed without the lock optimization
+            logger.debug(f"Advisory lock not supported (likely SQLite): {e}")
+            return True
+
 
     @classmethod
     async def store_url(cls, session: AsyncSessionLocal, mongo_db, url: URLCreate):
@@ -71,15 +101,33 @@ class URLService:
                 span.add_event("unused_key_repository_called")
                 unused_url = await cls._get_unused_key(session)
                 span.add_event("unused_key_repository_response", attributes={"unused_url": unused_url})
+
                 if unused_url is None:
-                    # If no keys, populate one and try again.
-                    span.add_event("populate_keys_called_manually", attributes={"count": 1})
-                    await cls._populate_keys(session, 1)
-                    span.add_event("unused_key_repository_called_after_populating")
+                    # No keys available - need to populate more
+                    # Use advisory lock to prevent thundering herd: only one thread does the populate
+                    lock_acquired = await cls._try_advisory_lock(session)
+
+                    if lock_acquired:
+                        # This thread acquired the lock - do the populate
+                        # Populate a larger batch (1000 keys) to handle concurrent load
+                        populate_count = 1000
+                        span.add_event("populate_keys_with_lock", attributes={"count": populate_count})
+                        logger.info(f"Acquired advisory lock, populating {populate_count} keys")
+                        await cls._populate_keys(session, populate_count)
+                    else:
+                        # Another thread is populating - wait briefly and retry
+                        span.add_event("waiting_for_other_thread_populate")
+                        logger.info("Another thread is populating keys, waiting...")
+                        await asyncio.sleep(0.1)  # Brief wait for other thread to finish
+
+                    # Try to get a key again (may have been populated by this or another thread)
+                    span.add_event("unused_key_repository_called_after_populate")
                     unused_url = await cls._get_unused_key(session)
-                    span.add_event("unused_key_repository_response_after_populating", attributes={"unused_url": unused_url})
+                    span.add_event("unused_key_repository_response_after_populate", attributes={"unused_url": unused_url})
+
                     if unused_url is None:
-                        span.add_event("unused_key_validation_failed", attributes={"unused_url": unused_url})
+                        # Still no keys after populate - service is truly unavailable
+                        span.add_event("unused_key_validation_failed")
                         span.set_status(trace.Status(trace.StatusCode.ERROR, "Service is temporarily unable to generate new URLs."))
                         raise HTTPException(status_code=503, detail="Service is temporarily unable to generate new URLs.")
                 
