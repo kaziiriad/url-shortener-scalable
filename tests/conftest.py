@@ -143,23 +143,22 @@ def fake_mongo():
 def _get_test_database_url():
     """
     Get the test database URL.
-    Uses PostgreSQL if available (from docker-compose), otherwise falls back to SQLite.
+    Uses PostgreSQL by default (production-like), with SQLite fallback via USE_TEST_SQLITE=true.
     """
     import os
 
-    # Check if PostgreSQL is available via environment variables
+    # Check if SQLite is explicitly requested
+    if os.environ.get("USE_TEST_SQLITE") == "true":
+        return "sqlite+aiosqlite:///:memory:"
+
+    # Default: Use PostgreSQL (production-like testing)
     pg_host = os.environ.get("TEST_DB_HOST", "localhost")
     pg_port = os.environ.get("TEST_DB_PORT", "5432")
     pg_user = os.environ.get("TEST_DB_USER", "postgres")
     pg_password = os.environ.get("TEST_DB_PASSWORD", "pgpassword")
     pg_db = os.environ.get("TEST_DB_NAME", "url_shortener")
 
-    # Try to use PostgreSQL if explicitly requested or if default port is set
-    if os.environ.get("USE_TEST_POSTGRES") == "true":
-        return f"postgresql+asyncpg://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db}"
-
-    # Default to SQLite for faster local development
-    return "sqlite+aiosqlite:///:memory:"
+    return f"postgresql+asyncpg://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db}"
 
 
 @pytest_asyncio.fixture

@@ -8,6 +8,7 @@ Tests cover:
 - End-to-end API interactions
 """
 import pytest
+import json
 from httpx import AsyncClient
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, func
@@ -41,20 +42,19 @@ async def test_full_url_creation_and_redirect(client: AsyncClient, client_redire
     assert url_doc is not None
     assert url_doc["long_url"] == long_url
 
-    # Step 3: Verify URL is NOT yet cached in Redis (cache is populated by redirect service)
+    # Step 3: Verify URL IS cached in Redis (create_service caches it immediately)
     cached_data = await redis_client.get(short_key)
-    assert cached_data is None  # Not cached yet
+    assert cached_data is not None
+    # Verify the cached data can be parsed and contains the correct URL
+    cached_json = json.loads(cached_data)
+    assert cached_json["long_url"] == long_url
 
-    # Step 4: Test redirect via redirect service (this should cache the URL)
+    # Step 4: Test redirect via redirect service (should use cache)
     redirect_response = await client_redirect.get(f"/{short_key}")
 
     # Accept any redirect status (301, 302, or 307)
     assert redirect_response.status_code in [301, 302, 307]
     assert redirect_response.headers["location"] == long_url
-
-    # Step 5: Verify URL is NOW cached in Redis after redirect
-    cached_data = await redis_client.get(short_key)
-    assert cached_data is not None
 
 
 @pytest.mark.e2e
@@ -127,18 +127,16 @@ async def test_concurrent_url_creation(client: AsyncClient, test_db_session, fak
     correctly handles concurrent key acquisition when multiple requests arrive
     simultaneously and the key pool is exhausted.
 
-    Note: This test requires PostgreSQL to work correctly. SQLite doesn't support
-    FOR UPDATE SKIP LOCKED, so the test will be skipped when using SQLite.
+    Note: PostgreSQL is now the default for tests. Use USE_TEST_SQLITE=true
+    to use SQLite (but this test will be skipped as SQLite doesn't support
+    FOR UPDATE SKIP LOCKED).
     """
     import asyncio
     import os
 
-    # Skip if not using PostgreSQL (SQLite doesn't support FOR UPDATE SKIP LOCKED)
-    if os.environ.get("USE_TEST_POSTGRES") != "true":
-        pytest.skip("Concurrent key acquisition test requires PostgreSQL (USE_TEST_POSTGRES=true)")
-
-    from common.db.sql.models import URL
-    import random
+    # Skip if explicitly using SQLite (SQLite doesn't support FOR UPDATE SKIP LOCKED)
+    if os.environ.get("USE_TEST_SQLITE") == "true":
+        pytest.skip("Concurrent key acquisition test requires PostgreSQL (SQLite doesn't support FOR UPDATE SKIP LOCKED)")
 
     long_urls = [f"https://example.com/concurrent-{i}" for i in range(10)]
 

@@ -28,13 +28,14 @@ from tests.test_utils import DatabaseHelper, PerformanceMetrics
 @pytest.mark.unit
 async def test_get_unused_key_success(test_db_session):
     """Test successfully retrieving an unused key"""
-    # Seed test keys using simple method for SQLite compatibility
+    # Seed test keys using 7-character format (matching production)
     from common.db.sql.models import URL
     import random
     import string
 
     for i in range(10):
-        key = f"key{i}_{random.randint(1000, 9999)}"
+        # Generate 7-character key (alphanumeric, like production)
+        key = ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
         url = URL(key=key, is_used=False)
         test_db_session.add(url)
     await test_db_session.commit()
