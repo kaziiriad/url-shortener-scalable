@@ -63,7 +63,10 @@ services:
       # MongoDB Config
       - MONGO_URI=mongodb://mongo_db:27017
       - MONGO_DB_NAME=url_shortener
-      
+      - MONGO_MAX_POOL_SIZE=200
+      - MONGO_MIN_POOL_SIZE=20
+      - MONGO_USE_UNORDERED_WRITES=true
+
       # Redis Config
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -259,8 +262,8 @@ services:
       - MONGO_INITDB_DATABASE=url_shortener
     command: >
       mongod
-      --wiredTigerCacheSizeGB 0.5
-      --maxConns 200
+      --wiredTigerCacheSizeGB 2
+      --maxConns 500
     labels:
       com.url-shortener.service: "document-db"
       com.url-shortener.description: "MongoDB for URL storage"

@@ -67,12 +67,18 @@ class MongoDBConnection:
         """Get MongoDB connection pool statistics."""
         if cls._client is None:
             return {"error": "Client not initialized"}
-        
+
         try:
-            # Get pool statistics from server status
+            # Get actual pool statistics from motor client
+            # Note: motor doesn't expose detailed pool stats like sync driver
+            # We return configuration values and status
             return {
-                "max_pool_size": 50,
-                "min_pool_size": 10,
+                "max_pool_size": settings.mongo_max_pool_size,
+                "min_pool_size": settings.mongo_min_pool_size,
+                "max_idle_time_ms": settings.mongo_max_idle_time_ms,
+                "uri": settings.mongo_uri.replace("mongodb://", "mongodb://***@") if "@" in settings.mongo_uri else settings.mongo_uri,
+                "database": settings.mongo_db_name,
+                "use_unordered_writes": settings.mongo_use_unordered_writes,
                 "status": "connected" if cls._client else "disconnected"
             }
         except Exception as e:

@@ -1,0 +1,75 @@
+# Docker Compose file for running k6 performance tests
+# Usage: docker-compose -f docker-compose-k6.yml up
+# Or: docker-compose -f docker-compose-k6.yml run k6-create
+
+version: '3.8'
+
+services:
+  # URL Creation Load Test
+  k6-create:
+    image: grafana/k6:latest
+    command: run /tests/create-url.js
+    volumes:
+      - ./tests:/tests
+    environment:
+      - BASE_URL=http://create_service:8000
+    networks:
+      - url_shortener_network
+    profiles:
+      - create
+      - all
+
+  # Redirect Load Test
+  k6-redirect:
+    image: grafana/k6:latest
+    command: run /tests/redirect.js
+    volumes:
+      - ./tests:/tests
+    environment:
+      - BASE_URL=http://redirect_service:8001
+      # Pre-populated keys for testing (adjust based on your setup)
+      - TEST_KEYS=test1,test2,test3,test4,test5
+    networks:
+      - url_shortener_network
+    profiles:
+      - redirect
+      - all
+
+  # Mixed Workload Test
+  k6-mixed:
+    image: grafana/k6:latest
+    command: run /tests/mixed-workload.js
+    volumes:
+      - ./tests:/tests
+    environment:
+      - CREATE_BASE_URL=http://create_service:8000
+      - REDIRECT_BASE_URL=http://redirect_service:8001
+      - TEST_KEYS=test1,test2,test3,test4,test5
+    networks:
+      - url_shortener_network
+    depends_on:
+      - create_service
+      - redirect_service
+    profiles:
+      - mixed
+      - all
+
+  # Smoke Test
+  k6-smoke:
+    image: grafana/k6:latest
+    command: run /tests/smoke-test.js
+    volumes:
+      - ./tests:/tests
+    environment:
+      - CREATE_BASE_URL=http://create_service:8000
+      - REDIRECT_BASE_URL=http://redirect_service:8001
+    networks:
+      - url_shortener_network
+    profiles:
+      - smoke
+      - all
+
+networks:
+  url_shortener_network:
+    name: url_shortener_scalable_url_shortener_network
+    external: true

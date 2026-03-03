@@ -24,9 +24,11 @@ class Settings(BaseSettings):
 
     mongo_uri: str = os.getenv("MONGO_URI", "mongodb://localhost:27017")
     mongo_db_name: str = os.getenv("MONGO_DB_NAME", "url_shortener")
-    mongo_max_pool_size: int = int(os.getenv("MONGO_MAX_POOL_SIZE", "50"))
-    mongo_min_pool_size: int = int(os.getenv("MONGO_MIN_POOL_SIZE", "10"))
+    mongo_max_pool_size: int = int(os.getenv("MONGO_MAX_POOL_SIZE", "200"))  # Increased from 50 to handle high concurrent load
+    mongo_min_pool_size: int = int(os.getenv("MONGO_MIN_POOL_SIZE", "20"))  # Increased from 10 for better warm pool
     mongo_max_idle_time_ms: int = int(os.getenv("MONGO_MAX_IDLE_TIME_MS", "45000"))
+    # Use unordered writes for better throughput (non-blocking on errors)
+    mongo_use_unordered_writes: bool = bool(os.getenv("MONGO_USE_UNORDERED_WRITES", "True").lower() in ("true", "1", "yes"))
     
     
     redis_host: str = os.getenv("REDIS_HOST", "localhost")
@@ -50,11 +52,11 @@ class Settings(BaseSettings):
     db_pool_recycle: int = int(os.getenv("DB_POOL_RECYCLE", "3600")) # Recycle connections after 1 hour
 
     # Key management
-    key_population_count: int = int(os.getenv("KEY_POPULATION_COUNT", "10"))
-    key_batch_size: int = int(os.getenv("KEY_BATCH_SIZE", "10000"))
-    key_generation_strategy: str = os.getenv("KEY_GENERATION_STRATEGY", "hybrid")  # hybrid, postgres, single, executemany
-    key_population_schedule: int = int(os.getenv("KEY_POPULATION_SCHEDULE", "1800"))  # seconds
-    key_minimum_threshold: int = int(os.getenv("KEY_MINIMUM_THRESHOLD", "1000")) # Alert if below this
+    key_population_count: int = int(os.getenv("KEY_POPULATION_COUNT", "50000"))  # Increased from 10 to 50K for production load
+    key_batch_size: int = int(os.getenv("KEY_BATCH_SIZE", "50000"))  # Increased from 10K to 50K
+    key_generation_strategy: str = os.getenv("KEY_GENERATION_STRATEGY", "postgres")  # Use postgres native for speed (50K+ keys/sec)
+    key_population_schedule: int = int(os.getenv("KEY_POPULATION_SCHEDULE", "300"))  # Reduced from 30min to 5min
+    key_minimum_threshold: int = int(os.getenv("KEY_MINIMUM_THRESHOLD", "10000")) # Alert if below 10K
 
     # Celery task configuration
     task_retry_delay: int = int(os.getenv("TASK_RETRY_DELAY", "60"))  # seconds
