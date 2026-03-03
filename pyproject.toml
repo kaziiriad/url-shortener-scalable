@@ -61,3 +61,8 @@ test = [
 where = ["."]
 include = ["create_service*", "common*"]
 exclude = ["tests*"]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]

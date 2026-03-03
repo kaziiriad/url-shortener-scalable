@@ -13,7 +13,12 @@ logger = logging.getLogger(__name__)
 url_router = APIRouter()
 
 @url_router.post("/create")
-async def create_url(url: URLCreate, session: AsyncSession = Depends(get_db_async), mongo_db = Depends(get_db)):
+async def create_url(
+    url: URLCreate,
+    session: AsyncSession = Depends(get_db_async),
+    mongo_db = Depends(get_db),
+    redis_client: RedisClient = Depends(RedisClient)
+):
 
     tracer = trace.get_tracer(__name__)
     span_name = "create_url_api"
@@ -26,9 +31,7 @@ async def create_url(url: URLCreate, session: AsyncSession = Depends(get_db_asyn
             span.add_event("URL service returned")
 
             # Store URL mapping in Redis for fast retrieval
-            span.add_event("Redis client initialized")
-            redis_client = RedisClient()
-            span.add_event("Redis client set")
+            span.add_event("Redis set called")
             await redis_client.set(url_data.short_url_id, url_data.model_dump_json(), expires_in=1800)
             span.add_event("Redis client set completed")
 

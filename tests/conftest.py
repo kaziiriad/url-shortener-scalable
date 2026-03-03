@@ -3,6 +3,7 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 import mongomock
 import fakeredis.aioredis
 import asyncio
@@ -137,13 +138,41 @@ def fake_mongo():
     """Fake MongoDB client with async wrappers for testing"""
     return get_async_mongo_db()
 
-# --- PostgreSQL (SQLite in-memory) ---
+# --- PostgreSQL (or SQLite fallback) ---
+
+def _get_test_database_url():
+    """
+    Get the test database URL.
+    Uses PostgreSQL if available (from docker-compose), otherwise falls back to SQLite.
+    """
+    import os
+
+    # Check if PostgreSQL is available via environment variables
+    pg_host = os.environ.get("TEST_DB_HOST", "localhost")
+    pg_port = os.environ.get("TEST_DB_PORT", "5432")
+    pg_user = os.environ.get("TEST_DB_USER", "postgres")
+    pg_password = os.environ.get("TEST_DB_PASSWORD", "pgpassword")
+    pg_db = os.environ.get("TEST_DB_NAME", "url_shortener")
+
+    # Try to use PostgreSQL if explicitly requested or if default port is set
+    if os.environ.get("USE_TEST_POSTGRES") == "true":
+        return f"postgresql+asyncpg://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db}"
+
+    # Default to SQLite for faster local development
+    return "sqlite+aiosqlite:///:memory:"
+
+
 @pytest_asyncio.fixture
 async def test_db_session():
-    """In-memory SQLite database for testing"""
+    """
+    Database session for testing.
+    Uses PostgreSQL if USE_TEST_POSTGRES=true, otherwise SQLite in-memory.
+    """
     from common.db.sql.models import Base
 
-    TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+    TEST_DATABASE_URL = _get_test_database_url()
+    is_postgres = "postgresql" in TEST_DATABASE_URL
+
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     TestingSessionLocal = sessionmaker(
         autocommit=False,
@@ -158,8 +187,16 @@ async def test_db_session():
     async with TestingSessionLocal() as session:
         yield session
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    # Cleanup
+    if is_postgres:
+        # For PostgreSQL, truncate tables instead of dropping schema
+        async with engine.begin() as conn:
+            await conn.execute(text("TRUNCATE TABLE urls CASCADE"))
+    else:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+
+    await engine.dispose()
 
 # ============================================
 # FastAPI Test Client
@@ -182,7 +219,9 @@ async def client(monkeypatch, redis_client):
     from sqlalchemy.orm import sessionmaker
 
     # Create test database
-    TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+    TEST_DATABASE_URL = _get_test_database_url()
+    is_postgres = "postgresql" in TEST_DATABASE_URL
+
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     TestingSessionLocal = sessionmaker(
         autocommit=False,
@@ -217,8 +256,15 @@ async def client(monkeypatch, redis_client):
     async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://test") as c:
         yield c
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    # Cleanup
+    if is_postgres:
+        async with engine.begin() as conn:
+            await conn.execute(text("TRUNCATE TABLE urls CASCADE"))
+    else:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+
+    await engine.dispose()
 
     # Clean up dependency overrides
     fastapi_app.dependency_overrides = {}

@@ -120,27 +120,30 @@ async def test_expired_url_returns_404(client: AsyncClient, test_db_session, fak
 
 @pytest.mark.e2e
 async def test_concurrent_url_creation(client: AsyncClient, test_db_session, fake_mongo):
-    """Test that concurrent URL creation works correctly"""
-    # Skip this test - the current implementation has a known race condition
-    # when keys are exhausted. Proper transaction isolation or locking would
-    # be needed to handle this correctly.
-    pytest.skip("Race condition in key acquisition - requires proper locking")
+    """
+    Test that concurrent URL creation works correctly.
 
+    This test validates that the FOR UPDATE SKIP LOCKED mechanism in PostgreSQL
+    correctly handles concurrent key acquisition when multiple requests arrive
+    simultaneously and the key pool is exhausted.
+
+    Note: This test requires PostgreSQL to work correctly. SQLite doesn't support
+    FOR UPDATE SKIP LOCKED, so the test will be skipped when using SQLite.
+    """
     import asyncio
+    import os
+
+    # Skip if not using PostgreSQL (SQLite doesn't support FOR UPDATE SKIP LOCKED)
+    if os.environ.get("USE_TEST_POSTGRES") != "true":
+        pytest.skip("Concurrent key acquisition test requires PostgreSQL (USE_TEST_POSTGRES=true)")
+
     from common.db.sql.models import URL
     import random
-    import string
-
-    # Pre-seed enough keys for the concurrent test to avoid race conditions
-    for i in range(20):  # Seed more than we need (10)
-        key = f"concurrent_{i}_{random.randint(1000, 9999)}"
-        url = URL(key=key, is_used=False)
-        test_db_session.add(url)
-    await test_db_session.commit()
 
     long_urls = [f"https://example.com/concurrent-{i}" for i in range(10)]
 
-    # Create multiple URLs concurrently
+    # Create multiple URLs concurrently WITHOUT pre-seeding keys
+    # This tests the auto-populate + concurrent acquisition behavior
     async def create_url(url):
         response = await client.post("/api/v1/create", json={"long_url": url})
         return response.json()
@@ -153,9 +156,9 @@ async def test_concurrent_url_creation(client: AsyncClient, test_db_session, fak
         assert result["message"] == "URL created successfully"
         assert "short_url" in result
 
-    # All short keys should be unique
+    # All short keys should be unique (this is the key assertion!)
     short_keys = [result["short_url"].split("/")[-1] for result in results]
-    assert len(short_keys) == len(set(short_keys))  # All unique
+    assert len(short_keys) == len(set(short_keys)), f"Duplicate keys found: {short_keys}"
 
 
 @pytest.mark.e2e
