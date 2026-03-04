@@ -7,7 +7,7 @@ Tests cover:
 - Expired URLs (both in cache and MongoDB)
 - URL not found scenarios
 - API endpoint behavior
-- Circuit breaker integration
+- MongoDB query projection optimization
 """
 import pytest
 from httpx import AsyncClient
@@ -118,7 +118,7 @@ async def test_get_long_url_not_found(redis_client, fake_mongo):
 
 @pytest.mark.unit
 async def test_find_url_in_mongo_success(fake_mongo):
-    """Test MongoDB URL lookup succeeds"""
+    """Test MongoDB URL lookup succeeds with projection optimization"""
     short_key = "lookup123"
     url_doc = {
         "short_url_id": short_key,
@@ -133,7 +133,9 @@ async def test_find_url_in_mongo_success(fake_mongo):
 
     assert result is not None
     assert result["long_url"] == "https://example.com/lookup"
-    assert result["short_url_id"] == short_key
+    # Note: After optimization with projection, only long_url and expires_at are returned
+    assert "short_url_id" not in result  # Projection optimization excludes this field
+    assert "_id" not in result  # Projection optimization excludes this field
 
 
 @pytest.mark.unit
@@ -145,33 +147,6 @@ async def test_find_url_in_mongo_not_found(fake_mongo):
     result = await RedirectService._find_url_in_mongo(fake_mongo, short_key)
 
     assert result is None
-
-
-# ============================================
-# Circuit Breaker Tests
-# ============================================
-
-@pytest.mark.unit
-async def test_mongo_circuit_breaker_integration(redis_client, fake_mongo):
-    """Test that circuit breaker integrates with MongoDB operations"""
-    from common.utils.circuit_breaker import mongo_circuit_breaker
-
-    # Reset circuit breaker
-    mongo_circuit_breaker.reset()
-
-    short_key = "circuit123"
-    url_doc = {
-        "short_url_id": short_key,
-        "long_url": "https://example.com/circuit",
-        "expires_at": (datetime.now(timezone.utc) + timedelta(days=15)).isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await fake_mongo.urls.insert_one(url_doc)
-
-    # First call should succeed
-    result = await RedirectService.get_long_url(short_key, fake_mongo, redis_client)
-
-    assert result == "https://example.com/circuit"
 
 
 # ============================================

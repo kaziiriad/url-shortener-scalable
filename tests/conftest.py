@@ -107,7 +107,10 @@ def get_async_mongo_db():
             async def insert_one(self, doc):
                 return self._collection.insert_one(doc)
 
-            async def find_one(self, query):
+            async def find_one(self, query, projection=None):
+                """Find one document with optional projection."""
+                if projection is not None:
+                    return self._collection.find_one(query, projection)
                 return self._collection.find_one(query)
 
             async def delete_one(self, query):
@@ -201,8 +204,8 @@ async def test_db_session():
 # FastAPI Test Client
 # ============================================
 
-# Import RedisClient for dependency overrides
-from common.core.redis_client import RedisClient
+# Import for dependency overrides
+from common.core.redis_client import RedisClient, get_redis_client
 
 @pytest_asyncio.fixture
 async def client(monkeypatch, redis_client):
@@ -250,7 +253,7 @@ async def client(monkeypatch, redis_client):
     async def override_redis_client():
         return redis_client
 
-    fastapi_app.dependency_overrides[RedisClient] = override_redis_client
+    fastapi_app.dependency_overrides[get_redis_client] = override_redis_client
 
     async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://test") as c:
         yield c
@@ -288,7 +291,7 @@ async def client_redirect(redis_client):
         return redis_client
 
     redirect_app.dependency_overrides[get_db] = override_get_db
-    redirect_app.dependency_overrides[RedisClient] = override_redis_client
+    redirect_app.dependency_overrides[get_redis_client] = override_redis_client
 
     async with AsyncClient(transport=ASGITransport(app=redirect_app), base_url="http://test") as c:
         yield c

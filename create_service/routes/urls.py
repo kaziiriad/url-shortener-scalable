@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from common.db.nosql.connection import get_db
 from common.db.sql.connection import get_db_async
-from common.core.redis_client import RedisClient
+from common.core.redis_client import RedisClient, get_redis_client
 from create_service.services.url_service import URLService
 from common.models.schemas import URLCreate
 from opentelemetry import trace
@@ -17,7 +17,7 @@ async def create_url(
     url: URLCreate,
     session: AsyncSession = Depends(get_db_async),
     mongo_db = Depends(get_db),
-    redis_client: RedisClient = Depends(RedisClient)
+    redis_client: RedisClient = Depends(get_redis_client)  # ← Singleton pattern
 ):
 
     tracer = trace.get_tracer(__name__)

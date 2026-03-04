@@ -24,16 +24,21 @@ def initialize_logger():
     log_processor = BatchLogRecordProcessor(otlp_exporter)
     logger_provider.add_log_record_processor(log_processor)
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[LoggingHandler()],
-    )
+    # Add console handler for immediate debugging
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.addHandler(console_handler)
 
     logging.getLogger().addHandler(LoggingHandler())
 
     logger = logging.getLogger(__name__)
-    logger.info("Logger initialized")
+    logger.info("Logger initialized with console output")
 
     return logger
 
