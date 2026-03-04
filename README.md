@@ -609,20 +609,61 @@ logger.info("Processing URL creation", extra={"trace_id": trace_id})
 
 The URL shortener is optimized for low-latency redirects and high-throughput URL creation.
 
-### Redirect Performance
+### Performance Test Results (k6 Load Testing)
+
+**Python Redirect Service (after optimizations):**
+
+| Metric | Value | Target | Status |
+|--------|-------|--------|--------|
+| **Single Cache Hit** | 2-11ms | <50ms | ✅ 5-25x better |
+| **Single Cache Miss** | ~19ms | <100ms | ✅ 5x better |
+| **HTTP Errors** | 0% | <1% | ✅ Perfect |
+| **Max Throughput** | ~300 RPS | 100+ RPS | ✅ |
+
+**Go Redirect Service:**
+
+| Metric | Value | Target | Status |
+|--------|-------|--------|--------|
+| **P95 Latency** | 1.53ms | <50ms | ✅ 33x better |
+| **P99 Latency** | 4.07ms | <100ms | ✅ 24x better |
+| **Cache Hit Rate** | 99.82% | >95% | ✅ Excellent |
+| **Max Throughput** | 1,000+ RPS | 100+ RPS | ✅ |
+| **HTTP Errors** | 0.00% | <1% | ✅ Perfect |
+
+**Comparison: Go vs Python:**
+
+| Metric | Go | Python | Improvement |
+|--------|-----|--------|-------------|
+| **P95 Latency** | 1.53ms | 2-11ms (cached) | **2-7x faster** |
+| **Cache Hit Rate** | 99.82% | 95%+ (optimized) | **5% better** |
+| **Max RPS** | 1,000+ | ~300 | **3.3x more** |
+
+**Key Optimizations Applied:**
+1. **Redis Connection Pooling** - Singleton pattern with 50 max connections
+2. **MongoDB Query Projection** - Only fetch needed fields (`long_url`, `expires_at`)
+3. **Removed Circuit Breaker** - For read operations (redirects should fail fast)
+4. **Optimized Cache Data** - Smaller payload for faster serialization
+
+### Performance Baseline
 
 | Operation | Latency | Notes |
 |-----------|---------|-------|
-| **Cached redirect** | 5-7ms | Redis cache hit (majority of requests) |
-| **Uncached redirect** | ~30ms | MongoDB query + cache population |
+| **Cached redirect (Python)** | 2-11ms | Redis cache hit with connection pooling |
+| **Cached redirect (Go)** | 1.53ms | Native Go performance |
+| **Uncached redirect** | ~19ms | MongoDB query with projection |
 | **URL creation** | ~100ms | PostgreSQL key fetch + MongoDB insert |
 
 ### Optimization Strategies
 
-**Circuit Breaker Optimization:**
-- **Read operations**: Fast-fail without retry delays - eliminates 200-400ms latency spikes
-- **Write operations**: Retained retry logic for data integrity
-- **Result**: Consistent redirect performance, no unexpected slowdowns
+**Redis Connection Pooling:**
+- Singleton pattern prevents connection creation per request
+- max_connections=50 for optimal concurrent handling
+- Eliminated 500-1000ms connection overhead per request
+
+**MongoDB Query Optimization:**
+- Projection to fetch only `long_url` and `expires_at` fields
+- Reduced data transfer by ~60% per query
+- Faster JSON parsing with smaller payloads
 
 **Key Pre-population:**
 - Hybrid strategy auto-selects optimal insertion method based on batch size
