@@ -525,49 +525,54 @@ Monitor tasks at: http://localhost:5555/flower
 
 ```
 url_shortener_scalable/
-├── create_service/        # Service for creating short URLs
-│   ├── routes/
-│   ├── services/
-│   └── Dockerfile
-├── redirect_service/      # Service for redirecting short URLs (FastAPI)
-│   ├── routes/
-│   ├── services/
-│   └── Dockerfile
-├── redirect-service-go/   # Go implementation of redirect service
-│   ├── cmd/server/        # Application entry point
-│   ├── internal/
-│   │   ├── config/        # Environment configuration
-│   │   ├── handler/       # HTTP handlers (Chi router)
-│   │   ├── service/       # Business logic layer
-│   │   ├── repository/    # Data access (MongoDB, Redis)
-│   │   └── utils/         # Circuit breaker implementation
-│   ├── go.mod
-│   └── .gitignore
-├── worker_service/        # Celery worker for background tasks
-│   ├── tasks/
-│   └── Dockerfile
-├── common/                # Common code shared across services
-│   ├── core/
-│   ├── db/
-│   ├── models/
-│   └── utils/
-├── monitoring/            # Observability stack (Tempo, Loki, Grafana)
-│   ├── grafana/           # Grafana dashboard provisioning
-│   ├── tempo/             # Tempo tracing configuration
-│   └── docker-compose-monitoring.yml
-├── ansible/               # Ansible playbooks and roles for deployment
-├── tests/                 # Automated tests (unit, integration, API)
-├── .dockerignore
-├── .gitignore
-├── .python-version
-├── docker-compose.yml
-├── docker/compose/
-│   ├── docker-compose.yml
-│   └── docker-compose-decoupled.yml
-├── nginx-decoupled.conf
+├── services_python/       # Python microservices
+│   ├── common/            # Shared Python code (core, db, models, utils)
+│   ├── create_service/    # URL creation API
+│   ├── redirect_service/  # Redirect service (FastAPI)
+│   └── worker_service/    # Celery background workers
+├── services_go/           # Go microservices
+│   └── redirect-service-go/  # High-performance redirect service
+│       ├── cmd/server/    # Application entry point
+│       ├── internal/      # Private application code
+│       │   ├── config/    # Environment configuration
+│       │   ├── handler/   # HTTP handlers (Chi router)
+│       │   ├── service/   # Business logic layer
+│       │   ├── repository/ # Data access (MongoDB, Redis)
+│       │   └── utils/     # Circuit breaker implementation
+│       ├── go.mod
+│       └── Dockerfile
+├── docker/                # Docker configurations
+│   └── compose/           # Docker compose files
+│       ├── docker-compose.yml
+│       ├── docker-compose-decoupled.yml
+│       ├── docker-compose-monitoring.yml
+│       └── docker-compose-k6.yml
+├── config/                # Database and service configs
+│   ├── init-postgres.sql
+│   ├── pg_hba.conf
+│   ├── pgbouncer.ini
+│   └── postgresql.conf
+├── nginx/                 # Nginx configurations
+│   ├── nginx-lb.conf
+│   └── nginx-decoupled.conf
+├── monitoring/            # Observability stack
+│   ├── grafana/           # Dashboard provisioning
+│   ├── tempo/             # Tracing configuration
+│   ├── loki-config.yaml
+│   ├── otel-collector-config.yaml
+│   └── promtail-config.yaml
+├── k6/                    # Performance tests
+│   ├── tests/             # k6 test scripts
+│   └── README.md
+├── scripts/               # Utility scripts
+│   ├── cleanup_mongodb.sh
+│   └── generate-pgbouncer-auth.sh
+├── tests/                 # Automated tests
+├── ansible/               # Ansible playbooks for deployment
+├── infra/                 # Pulumi IaC for AWS
 ├── pyproject.toml
-├── README.md
-└── uv.lock
+├── uv.lock
+└── README.md
 ```
 
 ## 📊 Observability
