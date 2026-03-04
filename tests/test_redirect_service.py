@@ -13,7 +13,7 @@ import pytest
 from httpx import AsyncClient
 from datetime import datetime, timezone, timedelta
 from redirect_service.services.redirect_service import RedirectService
-from common.core.redis_client import RedisClient
+from services_python.common.core.redis_client import RedisClient
 import json
 
 

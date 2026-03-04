@@ -3,10 +3,10 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from worker_service.celery_app import celery_app, AsyncTask
-from common.core.config import settings
-from common.db.nosql.connection import get_db
-from common.db.sql.models import URL
-from common.db.sql.connection import get_celery_db_session
+from services_python.common.core.config import settings
+from services_python.common.db.nosql.connection import get_db
+from services_python.common.db.sql.models import URL
+from services_python.common.db.sql.connection import get_celery_db_session
 from sqlalchemy import select, update
 from opentelemetry import trace
 

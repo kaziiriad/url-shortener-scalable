@@ -1,8 +1,8 @@
 import logging
 import sys
 
-from common.core.config import settings
-from common.core.tracing import create_resource
+from services_python.common.core.config import settings
+from services_python.common.core.tracing import create_resource
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor

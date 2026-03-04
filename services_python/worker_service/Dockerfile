@@ -21,8 +21,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Copy project files first (excluding .venv via .dockerignore)
 COPY pyproject.toml uv.lock ./
 # COPY .env .
-COPY common/ ./common/
-COPY worker_service/ ./worker_service/
+COPY services_python/common/ ./common/
+COPY services_python/worker_service/ ./worker_service/
 
 FROM python:3.12-slim
 
@@ -36,8 +36,8 @@ COPY --from=build-deps /app/.venv /app/.venv
 
 # Copy the application source code (same as stage 1)
 COPY pyproject.toml uv.lock ./
-COPY common/ ./common/
-COPY worker_service/ ./worker_service/
+COPY services_python/common/ ./common/
+COPY services_python/worker_service/ ./worker_service/
 
 ENV PATH="/app/.venv/bin:$PATH"
 

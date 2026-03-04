@@ -1,5 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from common.core.config import settings
+from services_python.common.core.config import settings
 import logging
 
 logger = logging.getLogger(__name__)

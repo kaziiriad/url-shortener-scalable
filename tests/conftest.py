@@ -48,7 +48,7 @@ def get_shared_redis_client():
     global _shared_fake_redis, _shared_redis_client
 
     if _shared_redis_client is None:
-        from common.core.redis_client import RedisClient
+        from services_python.common.core.redis_client import RedisClient
 
         # Create the shared fake redis instance
         _shared_fake_redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
@@ -170,7 +170,7 @@ async def test_db_session():
     Database session for testing.
     Uses PostgreSQL if USE_TEST_POSTGRES=true, otherwise SQLite in-memory.
     """
-    from common.db.sql.models import Base
+    from services_python.common.db.sql.models import Base
 
     TEST_DATABASE_URL = _get_test_database_url()
     is_postgres = "postgresql" in TEST_DATABASE_URL
@@ -205,18 +205,18 @@ async def test_db_session():
 # ============================================
 
 # Import for dependency overrides
-from common.core.redis_client import RedisClient, get_redis_client
+from services_python.common.core.redis_client import RedisClient, get_redis_client
 
 @pytest_asyncio.fixture
 async def client(monkeypatch, redis_client):
     """Async HTTP test client with mocked databases"""
-    from common.core.config import settings
+    from services_python.common.core.config import settings
     settings.testing = True
 
     from create_service.main import app as fastapi_app
-    from common.db.sql.connection import get_db_async
-    from common.db.sql.models import Base
-    from common.db.nosql.connection import get_db
+    from services_python.common.db.sql.connection import get_db_async
+    from services_python.common.db.sql.models import Base
+    from services_python.common.db.nosql.connection import get_db
     from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
     from sqlalchemy.orm import sessionmaker
 
@@ -275,11 +275,11 @@ async def client(monkeypatch, redis_client):
 @pytest_asyncio.fixture
 async def client_redirect(redis_client):
     """Async HTTP test client for redirect service with mocked databases"""
-    from common.core.config import settings
+    from services_python.common.core.config import settings
     settings.testing = True
 
     from redirect_service.main import app as redirect_app
-    from common.db.nosql.connection import get_db
+    from services_python.common.db.nosql.connection import get_db
 
     # Use the shared MongoDB database
     test_mongo_db = get_async_mongo_db()
@@ -348,7 +348,7 @@ def malicious_urls():
 @pytest.fixture(autouse=True)
 def reset_circuit_breakers():
     """Reset circuit breakers before each test to ensure clean state"""
-    from common.utils.circuit_breaker import postgres_circuit_breaker, mongo_circuit_breaker
+    from services_python.common.utils.circuit_breaker import postgres_circuit_breaker, mongo_circuit_breaker
 
     # Reset PostgreSQL circuit breaker
     postgres_circuit_breaker.reset()

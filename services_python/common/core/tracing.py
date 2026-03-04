@@ -16,7 +16,7 @@ from opentelemetry.propagators.b3 import B3MultiFormat
 from opentelemetry.propagators.composite import CompositePropagator
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
-from common.core.config import settings
+from services_python.common.core.config import settings
 from fastapi import FastAPI
 import logging
 

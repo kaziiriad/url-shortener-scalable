@@ -15,9 +15,9 @@ from httpx import AsyncClient, HTTPError
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, patch, MagicMock
 from sqlalchemy import text
-from common.models.schemas import URLCreate
-from common.utils.circuit_breaker import CircuitBreaker, postgres_circuit_breaker, mongo_circuit_breaker
-from common.core.redis_client import RedisClient
+from services_python.common.models.schemas import URLCreate
+from services_python.common.utils.circuit_breaker import CircuitBreaker, postgres_circuit_breaker, mongo_circuit_breaker
+from services_python.common.core.redis_client import RedisClient
 
 
 # ============================================
@@ -118,8 +118,8 @@ async def test_create_url_with_special_characters(client: AsyncClient):
 @pytest.mark.unit
 async def test_expired_url_returns_404(client: AsyncClient, client_redirect: AsyncClient, test_db_session, fake_mongo):
     """Test that expired URLs return 404"""
-    from common.db.sql.models import URL
-    from common.db.nosql.connection import get_db
+    from services_python.common.db.sql.models import URL
+    from services_python.common.db.nosql.connection import get_db
     import random
 
     # Create and use a key (62-character set: a-z, A-Z, 0-9)
@@ -151,7 +151,7 @@ async def test_expired_url_returns_404(client: AsyncClient, client_redirect: Asy
 @pytest.mark.unit
 async def test_url_expiring_at_exactly_now(client: AsyncClient, client_redirect: AsyncClient, test_db_session, fake_mongo):
     """Test edge case where URL expires exactly at current time"""
-    from common.db.sql.models import URL
+    from services_python.common.db.sql.models import URL
     import random
 
     key = ''.join(random.choices(string.ascii_letters + string.digits, k=7))
@@ -182,7 +182,7 @@ async def test_url_expiring_at_exactly_now(client: AsyncClient, client_redirect:
 @pytest.mark.unit
 async def test_postgres_circuit_breaker_opens_after_failures(client: AsyncClient, test_db_session):
     """Test that PostgreSQL circuit breaker opens after threshold failures"""
-    from common.db.sql.connection import AsyncSessionLocal
+    from services_python.common.db.sql.connection import AsyncSessionLocal
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.orm import sessionmaker
 
@@ -232,7 +232,7 @@ async def test_circuit_breaker_resets_after_timeout():
 @pytest.mark.integration
 async def test_redirect_works_when_redis_unavailable(client: AsyncClient, client_redirect: AsyncClient, test_db_session, fake_mongo, redis_client):
     """Test that redirect falls back to MongoDB when Redis is unavailable"""
-    from common.db.sql.models import URL
+    from services_python.common.db.sql.models import URL
     import random
 
     # Create a URL

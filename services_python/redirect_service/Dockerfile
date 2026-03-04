@@ -33,8 +33,8 @@ COPY --from=build-deps /app/.venv /app/.venv
 
 # Copy the application source code (same as stage 1)
 COPY pyproject.toml uv.lock ./
-COPY common/ ./common
-COPY redirect_service/ ./redirect_service   
+COPY services_python/common/ ./common
+COPY services_python/redirect_service/ ./redirect_service   
 
 
 # Expose the port the app runs on

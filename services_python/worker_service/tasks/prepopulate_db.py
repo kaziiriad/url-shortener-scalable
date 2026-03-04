@@ -1,10 +1,10 @@
 import asyncio
 import logging
 from worker_service.celery_app import celery_app, AsyncTask
-from common.db.sql.connection import get_celery_db_session
-from common.db.sql.models import URL
-from common.db.sql.url_repository import URLKeyRepository
-from common.core.config import settings
+from services_python.common.db.sql.connection import get_celery_db_session
+from services_python.common.db.sql.models import URL
+from services_python.common.db.sql.url_repository import URLKeyRepository
+from services_python.common.core.config import settings
 from opentelemetry import trace
 
 logger = logging.getLogger(__name__)

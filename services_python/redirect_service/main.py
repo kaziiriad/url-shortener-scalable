@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from common.core.config import settings
+from services_python.common.core.config import settings
 import uvicorn
 from opentelemetry import trace
-from common.core.tracing import setup_tracing
-from common.utils.logger import initialize_logger
+from services_python.common.core.tracing import setup_tracing
+from services_python.common.utils.logger import initialize_logger
 
 # Initialize structured logger with OpenTelemetry integration
 logger = initialize_logger()

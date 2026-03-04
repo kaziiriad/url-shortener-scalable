@@ -32,8 +32,8 @@ COPY --from=build-deps /app/.venv /app/.venv
 
 # Copy the application source code (same as stage 1)
 COPY pyproject.toml uv.lock ./
-COPY common/ ./common
-COPY create_service/ ./create_service   
+COPY services_python/common/ ./common
+COPY services_python/create_service/ ./create_service   
 
 # Create a non-root user and change ownership
 # RUN chown -R appuser:appuser /app && \

@@ -12,7 +12,7 @@ import json
 from httpx import AsyncClient
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, func
-from common.db.sql.models import URL
+from services_python.common.db.sql.models import URL
 
 
 # ============================================
@@ -22,7 +22,7 @@ from common.db.sql.models import URL
 @pytest.mark.e2e
 async def test_full_url_creation_and_redirect(client: AsyncClient, client_redirect: AsyncClient, test_db_session, fake_mongo, redis_client):
     """Test complete workflow: create URL → MongoDB → redirect → cache"""
-    from common.core.config import settings
+    from services_python.common.core.config import settings
 
     # Step 1: Create a short URL using create service
     long_url = "https://example.com/full-test"
@@ -162,7 +162,7 @@ async def test_concurrent_url_creation(client: AsyncClient, test_db_session, fak
 @pytest.mark.e2e
 async def test_key_exhaustion_and_auto_population(client: AsyncClient, test_db_session):
     """Test that the system handles key exhaustion gracefully"""
-    from common.db.sql.models import URL
+    from services_python.common.db.sql.models import URL
     import random
     import string
 

@@ -2,10 +2,10 @@ import asyncio
 import logging
 from celery import Celery, Task
 from celery.signals import worker_init, worker_shutdown, worker_process_init
-from common.core.config import settings
+from services_python.common.core.config import settings
 from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from opentelemetry import trace
-from common.utils.logger import initialize_logger
+from services_python.common.utils.logger import initialize_logger
 
 # Initialize OpenTelemetry logging infrastructure
 initialize_logger()

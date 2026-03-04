@@ -4,11 +4,11 @@ Database health monitoring and connection pool tracking.
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from common.db.sql.connection import get_db_async, get_pool_status, engine
-from common.db.nosql.connection import check_mongo_health, MongoDBConnection
-from common.db.sql.models import URL
-from common.db.sql.url_repository import URLKeyRepository
-from common.core.redis_client import RedisClient
+from services_python.common.db.sql.connection import get_db_async, get_pool_status, engine
+from services_python.common.db.nosql.connection import check_mongo_health, MongoDBConnection
+from services_python.common.db.sql.models import URL
+from services_python.common.db.sql.url_repository import URLKeyRepository
+from services_python.common.core.redis_client import RedisClient
 import time
 import logging
 from opentelemetry import trace

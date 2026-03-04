@@ -1,4 +1,4 @@
-from common.core.config import settings
+from services_python.common.core.config import settings
 from redis.asyncio import Redis, ConnectionPool
 import logging
 

@@ -2,8 +2,8 @@
 import asyncio
 import logging
 from sqlalchemy.ext.asyncio import AsyncEngine
-from common.db.sql.connection import engine, Base
-from common.db.sql.models import URL  # Import all models to register them
+from services_python.common.db.sql.connection import engine, Base
+from services_python.common.db.sql.models import URL  # Import all models to register them
 
 logger = logging.getLogger(__name__)
 

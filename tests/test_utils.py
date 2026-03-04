@@ -77,7 +77,7 @@ class DatabaseHelper:
     @staticmethod
     async def seed_test_keys(session, count: int = 100):
         """Seed test keys in PostgreSQL for testing"""
-        from common.db.sql.url_repository import URLKeyRepository
+        from services_python.common.db.sql.url_repository import URLKeyRepository
 
         seeded = await URLKeyRepository.pre_populate_keys_postgres_native(
             session=session,
@@ -89,7 +89,7 @@ class DatabaseHelper:
     async def cleanup_test_data(session):
         """Clean up test data after tests"""
         # Clean up MongoDB
-        from common.db.nosql.connection import get_db
+        from services_python.common.db.nosql.connection import get_db
         mongo_db = get_db()
         await mongo_db.urls.delete_many({})
 

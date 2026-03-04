@@ -154,7 +154,7 @@ def with_circuit_breaker(circuit_breaker: CircuitBreaker):
 @with_circuit_breaker(postgres_circuit_breaker)
 async def get_unused_key_with_retry(session):
     """Get unused key with retry and circuit breaker."""
-    from common.db.sql.models import URL
+    from services_python.common.db.sql.models import URL
     return await URL.get_unused_key(session)
 
 @with_retry(max_retries=3, delay=1.0, backoff=2.0)

@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import NullPool
-from common.core.config import settings
+from services_python.common.core.config import settings
 import logging
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 

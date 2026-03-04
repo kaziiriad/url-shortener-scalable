@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from common.core.redis_client import RedisClient
+from services_python.common.core.redis_client import RedisClient
 from opentelemetry import trace
 import logging
 import json

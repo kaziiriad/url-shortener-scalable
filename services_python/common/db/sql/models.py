@@ -1,5 +1,5 @@
 
-from common.db.sql.connection import Base
+from services_python.common.db.sql.connection import Base
 from sqlalchemy import Column, String, Boolean, Integer
 import logging
 

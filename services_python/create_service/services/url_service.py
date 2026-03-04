@@ -1,13 +1,13 @@
 from datetime import datetime, timedelta, timezone
-from common.models.schemas import URL, URLCreate, URLDelete
-from common.db.sql.url_repository import URLKeyRepository
+from services_python.common.models.schemas import URL, URLCreate, URLDelete
+from services_python.common.db.sql.url_repository import URLKeyRepository
 from fastapi import HTTPException
 import logging
 import json
 import asyncio
-from common.db.sql.connection import AsyncSessionLocal
-from common.utils.circuit_breaker import with_retry, with_circuit_breaker, postgres_circuit_breaker, mongo_circuit_breaker
-from common.core.redis_client import RedisClient
+from services_python.common.db.sql.connection import AsyncSessionLocal
+from services_python.common.utils.circuit_breaker import with_retry, with_circuit_breaker, postgres_circuit_breaker, mongo_circuit_breaker
+from services_python.common.core.redis_client import RedisClient
 from opentelemetry import trace
 from sqlalchemy import text
 

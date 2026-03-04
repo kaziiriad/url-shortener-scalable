@@ -1,11 +1,11 @@
-from common.core.config import settings
+from services_python.common.core.config import settings
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from common.db.nosql.connection import get_db
-from common.db.sql.connection import get_db_async
-from common.core.redis_client import RedisClient, get_redis_client
+from services_python.common.db.nosql.connection import get_db
+from services_python.common.db.sql.connection import get_db_async
+from services_python.common.core.redis_client import RedisClient, get_redis_client
 from create_service.services.url_service import URLService
-from common.models.schemas import URLCreate
+from services_python.common.models.schemas import URLCreate
 from opentelemetry import trace
 import logging
 

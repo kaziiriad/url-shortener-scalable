@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from common.core.config import settings
+from services_python.common.core.config import settings
 from create_service.routes.urls import url_router
 from create_service.routes.monitoring import monitoring_router
-from common.db.sql.init_db import init_database
-from common.utils.logger import initialize_logger
-from common.core.tracing import setup_tracing
+from services_python.common.db.sql.init_db import init_database
+from services_python.common.utils.logger import initialize_logger
+from services_python.common.core.tracing import setup_tracing
 import uvicorn
 
 # Configure logging

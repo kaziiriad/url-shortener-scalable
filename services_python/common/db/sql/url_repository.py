@@ -4,8 +4,8 @@ import string
 from sqlalchemy import update, select, func, text
 # from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from common.core.config import settings
-from common.db.sql.models import URL
+from services_python.common.core.config import settings
+from services_python.common.db.sql.models import URL
 # from sqlalchemy.sql import func, text
 from opentelemetry import trace
 

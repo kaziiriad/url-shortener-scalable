@@ -14,9 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime, timezone, timedelta
 from create_service.services.url_service import URLService
-from common.models.schemas import URLCreate, URL, URLDelete
-from common.db.sql.url_repository import URLKeyRepository
-from common.utils.circuit_breaker import postgres_circuit_breaker, mongo_circuit_breaker
+from services_python.common.models.schemas import URLCreate, URL, URLDelete
+from services_python.common.db.sql.url_repository import URLKeyRepository
+from services_python.common.utils.circuit_breaker import postgres_circuit_breaker, mongo_circuit_breaker
 import json
 from tests.test_utils import DatabaseHelper, PerformanceMetrics
 
@@ -29,7 +29,7 @@ from tests.test_utils import DatabaseHelper, PerformanceMetrics
 async def test_get_unused_key_success(test_db_session):
     """Test successfully retrieving an unused key"""
     # Seed test keys using 7-character format (matching production)
-    from common.db.sql.models import URL
+    from services_python.common.db.sql.models import URL
     import random
     import string
 
@@ -59,7 +59,7 @@ async def test_get_unused_key_none_available(test_db_session):
 @pytest.mark.unit
 async def test_pre_populate_keys_postgres_native(test_db_session):
     """Test key pre-population using simple method for SQLite"""
-    from common.db.sql.models import URL
+    from services_python.common.db.sql.models import URL
     import random
     import string
 
@@ -78,7 +78,7 @@ async def test_pre_populate_keys_postgres_native(test_db_session):
 @pytest.mark.unit
 async def test_get_available_key_count(test_db_session):
     """Test getting available key count"""
-    from common.db.sql.models import URL
+    from services_python.common.db.sql.models import URL
     import random
     import string
 
@@ -116,7 +116,7 @@ async def test_pre_populate_keys_zero_count(test_db_session):
 @pytest.mark.unit
 async def test_store_url_success(client, test_db_session, fake_mongo):
     """Test successful URL storage"""
-    from common.db.sql.models import URL
+    from services_python.common.db.sql.models import URL
     import random
     import string
 
@@ -197,7 +197,7 @@ async def test_delete_url_success(client, fake_mongo):
 @pytest.mark.integration
 async def test_create_url_endpoint_success(client: AsyncClient, test_db_session):
     """Test POST /api/v1/create endpoint"""
-    from common.db.sql.models import URL
+    from services_python.common.db.sql.models import URL
     import random
     import string
 
@@ -224,7 +224,7 @@ async def test_create_url_endpoint_success(client: AsyncClient, test_db_session)
 @pytest.mark.integration
 async def test_create_url_endpoint_with_user_id(client: AsyncClient, test_db_session):
     """Test URL creation with user_id"""
-    from common.db.sql.models import URL
+    from services_python.common.db.sql.models import URL
     import random
     import string
 
@@ -250,7 +250,7 @@ async def test_create_url_endpoint_with_user_id(client: AsyncClient, test_db_ses
 @pytest.mark.integration
 async def test_create_url_endpoint_auto_adds_https(client: AsyncClient, test_db_session):
     """Test that https:// is auto-added to URLs without scheme"""
-    from common.db.sql.models import URL
+    from services_python.common.db.sql.models import URL
     import random
     import string
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
-from common.db.nosql.connection import get_db
-from common.core.redis_client import RedisClient, get_redis_client
+from services_python.common.db.nosql.connection import get_db
+from services_python.common.core.redis_client import RedisClient, get_redis_client
 from opentelemetry import trace
 from redirect_service.services.redirect_service import RedirectService
 import logging
