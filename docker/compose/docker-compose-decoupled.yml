@@ -278,8 +278,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - ./pg_hba.conf:/etc/postgresql/15/main/pg_hba.conf:ro
+      - ../../config/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../../config/pg_hba.conf:/etc/postgresql/15/main/pg_hba.conf:ro
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=pgpassword
@@ -333,7 +333,7 @@ services:
       - AUTH_TYPE=md5
       - AUTH_FILE=/etc/pgbouncer/userlist.txt
     volumes:
-      - ./pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ../../config/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
       - ./userlist.txt:/etc/pgbouncer/userlist.txt:ro
     networks:
       - url_shortener_network
