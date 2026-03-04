@@ -111,10 +111,10 @@ result = await mongo_db.urls.find_one(
 
 ```bash
 # Start services
-docker-compose -f docker-compose-decoupled.yml up -d
+docker-compose -f docker/compose/docker-compose-decoupled.yml up -d
 
 # For Go redirect service
-docker-compose -f docker-compose-decoupled.yml --profile go up -d redirect_service_go
+docker-compose -f docker/compose/docker-compose-decoupled.yml --profile go up -d redirect_service_go
 ```
 
 ### Test Commands

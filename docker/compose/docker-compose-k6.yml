@@ -10,7 +10,7 @@ services:
     image: grafana/k6:latest
     command: run /tests/create-url.js
     volumes:
-      - ./tests:/tests
+      - ../../k6/tests:/tests
     environment:
       - BASE_URL=http://create_service:8000
     networks:
@@ -24,7 +24,7 @@ services:
     image: grafana/k6:latest
     command: run /tests/redirect.js
     volumes:
-      - ./tests:/tests
+      - ../../k6/tests:/tests
     environment:
       - BASE_URL=http://redirect_service:8001
       # Pre-populated keys for testing (adjust based on your setup)
@@ -40,7 +40,7 @@ services:
     image: grafana/k6:latest
     command: run /tests/mixed-workload.js
     volumes:
-      - ./tests:/tests
+      - ../../k6/tests:/tests
     environment:
       - CREATE_BASE_URL=http://create_service:8000
       - REDIRECT_BASE_URL=http://redirect_service:8001
@@ -59,7 +59,7 @@ services:
     image: grafana/k6:latest
     command: run /tests/smoke-test.js
     volumes:
-      - ./tests:/tests
+      - ../../k6/tests:/tests
     environment:
       - CREATE_BASE_URL=http://create_service:8000
       - REDIRECT_BASE_URL=http://redirect_service:8001

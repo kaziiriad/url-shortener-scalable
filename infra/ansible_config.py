@@ -43,7 +43,7 @@ all:
           ansible_user: ubuntu
           ansible_ssh_private_key_file: "~/.ssh/{key_name}.id_rsa"
           server_type: load_balancer
-          nginx_config: nginx-lb.conf
+          nginx_config: nginx/nginx-lb.conf
           ports:
             - 80
             - 443

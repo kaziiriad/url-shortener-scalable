@@ -26,7 +26,7 @@ This directory contains performance and load testing scripts using [k6](https://
 
 ```bash
 # From project root - start all services first
-docker-compose -f docker-compose-decoupled.yml up -d
+docker-compose -f docker/compose/docker-compose-decoupled.yml up -d
 
 # Start monitoring stack (optional, for Grafana dashboards)
 cd monitoring && docker-compose -f docker-compose-monitoring.yml up -d && cd ..
@@ -206,7 +206,7 @@ k6 run tests/redirect.js --env TEST_KEYS=test1,test2,test3
 
 ```bash
 # Services must be running first
-docker-compose -f docker-compose-decoupled.yml up -d
+docker-compose -f docker/compose/docker-compose-decoupled.yml up -d
 
 # Run tests against Docker services using the project network
 docker run --rm -i --network url_shortener_scalable_url_shortener_network \
@@ -348,7 +348,7 @@ k6 run --out push=http://localhost:9091 tests/mixed-workload.js
 
 Ensure services are running:
 ```bash
-docker-compose -f docker-compose-decoupled.yml ps
+docker-compose -f docker/compose/docker-compose-decoupled.yml ps
 ```
 
 ### High Failure Rates

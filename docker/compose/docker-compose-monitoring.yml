@@ -10,7 +10,7 @@ services:
     restart: unless-stopped
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
-      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - ../../monitoring/otel-collector-config.yaml:/etc/otel-collector-config.yaml
     ports:
       - "4317:4317"
       - "4318:4318"
@@ -29,7 +29,7 @@ services:
     user: "0"
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
-      - ./tempo/tempo.yaml:/etc/tempo.yaml
+      - ../../monitoring/tempo/tempo.yaml:/etc/tempo.yaml
       - tempo_data:/tmp/tempo
     ports:
       - "3200:3200"
@@ -47,7 +47,7 @@ services:
     user: "0"
     command: ["-config.file=/etc/loki-config.yaml"]
     volumes:
-      - ./loki-config.yaml:/etc/loki-config.yaml
+      - ../../monitoring/loki-config.yaml:/etc/loki-config.yaml
       - loki_data:/loki
     ports:
       - "3100:3100"
@@ -63,7 +63,7 @@ services:
     restart: unless-stopped
     command: ["--config.file=/etc/promtail/promtail-config.yaml"]
     volumes:
-      - ./promtail-config.yaml:/etc/promtail/promtail-config.yaml
+      - ../../monitoring/promtail-config.yaml:/etc/promtail/promtail-config.yaml
       - promtail_positions:/tmp
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
@@ -82,7 +82,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ../../monitoring/grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=admin

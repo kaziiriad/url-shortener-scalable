@@ -248,7 +248,7 @@ This project uses Ansible to automate the configuration and deployment of the ap
 If you encounter issues with MongoDB, you can use the `cleanup_mongodb.sh` script to completely remove and reinstall MongoDB on a server. This script is located in the project root.
 
 ```bash
-./cleanup_mongodb.sh
+./scripts/cleanup_mongodb.sh
 ```
 
 ## Load Balancer and Rate Limiter
@@ -260,14 +260,14 @@ This project includes a comprehensive Nginx load balancer and rate limiter confi
 To run the application with the Nginx load balancer, use the `docker-compose-decoupled.yml` file:
 
 ```bash
-docker-compose -f docker-compose-decoupled.yml up -d
+docker-compose -f docker/compose/docker-compose-decoupled.yml up -d
 ```
 
 This will start the Nginx load balancer, the `create_service`, `redirect_service`, and all the necessary backend services.
 
 ### Rate Limiting
 
-The Nginx configuration file `nginx-decoupled.conf` contains the detailed configuration for the load balancer and rate limiter.
+The Nginx configuration file `nginx/nginx-decoupled.conf` contains the detailed configuration for the load balancer and rate limiter.
 
 ## 📋 Prerequisites
 
@@ -288,7 +288,7 @@ The Nginx configuration file `nginx-decoupled.conf` contains the detailed config
 
 2.  **Start all services**
     ```bash
-    docker-compose -f docker-compose-decoupled.yml up -d
+    docker-compose -f docker/compose/docker-compose-decoupled.yml up -d
     ```
 
 3.  **Start monitoring stack (optional)**
@@ -298,7 +298,7 @@ The Nginx configuration file `nginx-decoupled.conf` contains the detailed config
 
 4.  **Verify services are running**
     ```bash
-    docker-compose -f docker-compose-decoupled.yml ps
+    docker-compose -f docker/compose/docker-compose-decoupled.yml ps
     ```
 
 5.  **Access the application**
@@ -322,7 +322,7 @@ The Nginx configuration file `nginx-decoupled.conf` contains the detailed config
 
 3.  **Start external services**
     ```bash
-    docker-compose -f docker-compose-decoupled.yml up -d redis postgres mongo_db pgbouncer
+    docker-compose -f docker/compose/docker-compose-decoupled.yml up -d redis postgres mongo_db pgbouncer
     ```
 
 4.  **Run the applications**
@@ -561,7 +561,9 @@ url_shortener_scalable/
 ├── .gitignore
 ├── .python-version
 ├── docker-compose.yml
-├── docker-compose-decoupled.yml
+├── docker/compose/
+│   ├── docker-compose.yml
+│   └── docker-compose-decoupled.yml
 ├── nginx-decoupled.conf
 ├── pyproject.toml
 ├── README.md

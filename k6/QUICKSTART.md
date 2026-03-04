@@ -4,7 +4,7 @@
 
 Ensure services are running:
 ```bash
-docker-compose -f docker-compose-decoupled.yml up -d
+docker-compose -f docker/compose/docker-compose-decoupled.yml up -d
 ```
 
 ## Run Your First Test
@@ -92,7 +92,7 @@ http_req_failed................: 15.00% ✓ 900  ✗ 5100
 ### "Connection refused"
 **Solution**: Services are not running. Start them with:
 ```bash
-docker-compose -f docker-compose-decoupled.yml up -d
+docker-compose -f docker/compose/docker-compose-decoupled.yml up -d
 ```
 
 ### "Cannot connect to service"
