@@ -39,7 +39,7 @@ services:
   # ============================================
   web_app:
     build:
-      context: ../../python/create_service
+      context: ../../services_python/create_service
       dockerfile: ./app/Dockerfile
     expose:
       - "8000"
@@ -285,7 +285,7 @@ services:
   # ============================================
   celery_worker:
     build:
-      context: ../../python/create_service
+      context: ../../services_python/create_service
       dockerfile: ./app/Dockerfile
     container_name: url_shortener_celery_worker
     # CRITICAL: Use --pool=solo to avoid "Event loop is closed" errors
@@ -385,7 +385,7 @@ services:
   # ============================================
   celery_beat:
     build:
-      context: ../../python/create_service
+      context: ../../services_python/create_service
       dockerfile: ./app/Dockerfile
     container_name: url_shortener_celery_beat
     command: >
@@ -438,7 +438,7 @@ services:
   # ============================================
   celery_flower:
     build:
-      context: ../../python/create_service
+      context: ../../services_python/create_service
       dockerfile: ./app/Dockerfile
     container_name: url_shortener_celery_flower
     command: >

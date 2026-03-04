@@ -38,7 +38,7 @@ services:
   # ============================================
   create_service:
     build:
-      context: ../../python/create_service
+      context: ../../services_python/create_service
       dockerfile: ./create_service/Dockerfile
     expose:
       - "8000"
@@ -105,7 +105,7 @@ services:
 
   redirect_service:
     build:
-      context: ../../python/redirect_service
+      context: ../../services_python/redirect_service
       dockerfile: ./redirect_service/Dockerfile
     ports:
       - "8001:8001"
@@ -163,7 +163,7 @@ services:
   # Alternative Go redirect service (comment out python redirect_service to use this)
   redirect_service_go:
     build:
-      context: ../../go/redirect-service-go
+      context: ../../services_go/redirect-service-go
       dockerfile: Dockerfile
     ports:
       - "8001:8001"
@@ -356,7 +356,7 @@ services:
   # ============================================
   celery_worker:
     build:
-      context: ../../python/worker_service
+      context: ../../services_python/worker_service
       dockerfile: ./Dockerfile
     container_name: url_shortener_celery_worker
     command: >
@@ -423,7 +423,7 @@ services:
   # ============================================
   celery_beat:
     build:
-      context: ../../python/worker_service
+      context: ../../services_python/worker_service
       dockerfile: ./Dockerfile
     container_name: url_shortener_celery_beat
     command: >
@@ -479,7 +479,7 @@ services:
   # ============================================
   celery_flower:
     build:
-      context: ../../python/worker_service
+      context: ../../services_python/worker_service
       dockerfile: ./Dockerfile
     container_name: url_shortener_celery_flower
     ports:
