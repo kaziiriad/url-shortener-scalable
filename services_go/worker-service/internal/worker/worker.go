@@ -106,13 +106,13 @@ func (w *Worker) registerPeriodicTasks() error {
 		return err
 	}
 
-	// Register periodic task using Asynq's extended cron syntax
-	// Convert seconds to minutes for @every syntax (e.g., 300s → "@every 5m")
+	// Register periodic task using standard cron syntax
+	// Convert seconds to minutes (e.g., 300s → "*/5 * * * *")
 	minutes := w.config.KeyPopulationSchedule / 60
 	if minutes < 1 {
 		minutes = 1 // Minimum 1 minute
 	}
-	cronSpec := fmt.Sprintf("@every %dm", minutes)
+	cronSpec := fmt.Sprintf("*/%d * * * *", minutes)
 	task := asynq.NewTask("key:prepopulate", payload, asynq.Queue(w.config.QueueName))
 
 	if _, err := w.scheduler.Register(cronSpec, task); err != nil {

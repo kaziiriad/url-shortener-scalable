@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"math/rand"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -195,6 +197,11 @@ func (db *PostgresDB) Close() error {
 
 // Helper functions
 
+// Initialize random seed
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 // generateKeys generates random alphanumeric keys
 func generateKeys(count int) ([]string, error) {
 	keys := make([]string, count)
@@ -215,41 +222,9 @@ func generateKey() (string, error) {
 
 	key := make([]byte, keyLength)
 	for i := range key {
-		// Using crypto/rand would be better but this matches Python's random.choices
-		// For production, consider using crypto/rand
-		randomByte := make([]byte, 1)
-		if _, err := randRead(randomByte); err != nil {
-			return "", fmt.Errorf("failed to generate random byte: %w", err)
-		}
-		key[i] = charset[randomByte[0]%byte(len(charset))]
+		key[i] = charset[rand.Intn(len(charset))]
 	}
 	return string(key), nil
-}
-
-// randRead wraps crypto/rand.Read for simplicity
-func randRead(b []byte) (int, error) {
-	// Simple fallback using math/rand (for now - consider crypto/rand for production)
-	// This matches the Python implementation's use of random.choices
-	for i := range b {
-		// Using a simple pseudo-random generator
-		// In production, use crypto/rand or a proper CSPRNG
-		b[i] = byte(mathRandInt(256))
-	}
-	return len(b), nil
-}
-
-func mathRandInt(max int) int {
-	// Simple linear congruential generator
-	// In production, use math/rand or crypto/rand properly
-	const (
-		a = 1664525
-		c = 1013904223
-		m = 2147483648
-	)
-	// Simple seed - in production use time or a proper PRNG
-	seed := int(uint32(^uint32(0)) >> 32)
-	seed = (a*seed + c) % m
-	return seed % max
 }
 
 // buildValuesClause builds a VALUES clause for SQL INSERT

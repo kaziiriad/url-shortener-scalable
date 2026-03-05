@@ -538,9 +538,9 @@ services:
       - SERVICE_NAME=worker-service-go
       - ENVIRONMENT=development
 
-      # PostgreSQL (direct connection for key operations)
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
+      # PostgreSQL (via PgBouncer for connection pooling)
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=6432
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=pgpassword
       - POSTGRES_DBNAME=url_shortener
@@ -558,7 +558,7 @@ services:
       # Worker Config
       - WORKER_CONCURRENCY=10
       - WORKER_QUEUE=db_tasks
-      - KEY_POPULATION_COUNT=100
+      - KEY_POPULATION_COUNT=10000
       - KEY_POPULATION_SCHEDULE=300
 
       # OpenTelemetry (optional - not yet implemented)
