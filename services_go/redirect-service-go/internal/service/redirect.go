@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
-	"redirect-service-go/internal/repository"
-	"redirect-service-go/internal/utils"
+	"github.com/kaziiriad/url-shortener-scalable/services_go/redirect-service-go/internal/repository"
+	"github.com/kaziiriad/url-shortener-scalable/services_go/redirect-service-go/internal/utils"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
