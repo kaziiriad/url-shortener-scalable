@@ -1,6 +1,6 @@
 module github.com/kaziiriad/url-shortener-scalable/services_go/redirect-service-go
 
-go 1.25.7
+go 1.24
 
 // Use local common module
 replace github.com/kaziiriad/url-shortener-scalable/services_go/common => ../common

@@ -524,6 +524,63 @@ services:
       com.url-shortener.service: "monitoring"
       com.url-shortener.description: "Celery Flower monitoring dashboard"
 
+  # ============================================
+  # BACKGROUND WORKERS (Go Asynq Worker)
+  # Alternative to Python Celery worker + beat
+  # ============================================
+  worker_service_go:
+    build:
+      context: ../../services_go
+      dockerfile: worker-service/Dockerfile
+    container_name: url_shortener_worker_go
+    environment:
+      # Application Config
+      - SERVICE_NAME=worker-service-go
+      - ENVIRONMENT=development
+
+      # PostgreSQL (direct connection for key operations)
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=pgpassword
+      - POSTGRES_DBNAME=url_shortener
+
+      # Redis (task queue broker)
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=1
+      - REDIS_PASSWORD=
+
+      # MongoDB (for URL storage - not directly used by worker but config matches)
+      - MONGO_URI=mongodb://mongo_db:27017
+      - MONGO_DB_NAME=url_shortener
+
+      # Worker Config
+      - WORKER_CONCURRENCY=10
+      - WORKER_QUEUE=db_tasks
+      - KEY_POPULATION_COUNT=100
+      - KEY_POPULATION_SCHEDULE=300
+
+      # OpenTelemetry (optional - not yet implemented)
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - TRACING_ENABLED=false
+
+    networks:
+      - url_shortener_network
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mongo_db:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      com.url-shortener.service: "background-worker"
+      com.url-shortener.description: "Go Asynq worker for async tasks (replaces Celery worker + beat)"
+    profiles:
+      - go
+
 # ============================================
 # NETWORKS
 # ============================================

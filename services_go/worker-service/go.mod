@@ -1,19 +1,21 @@
 module github.com/kaziiriad/url-shortener-scalable/services_go/worker-service
 
-go 1.25.7
+go 1.24.0
 
 // Use local common module
 replace github.com/kaziiriad/url-shortener-scalable/services_go/common => ../common
 
-require github.com/kaziiriad/url-shortener-scalable/services_go/common v0.0.0-00010101000000-000000000000
+require (
+	github.com/hibiken/asynq v0.26.0
+	github.com/kaziiriad/url-shortener-scalable/services_go/common v0.0.0-00010101000000-000000000000
+	github.com/lib/pq v1.11.2
+)
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/hibiken/asynq v0.26.0 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
-	github.com/lib/pq v1.11.2 // indirect
 	github.com/redis/go-redis/v9 v9.14.1 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
