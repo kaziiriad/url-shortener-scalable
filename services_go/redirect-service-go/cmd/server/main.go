@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"redirect-service-go/internal/config"
-	"redirect-service-go/internal/handler"
-	"redirect-service-go/internal/repository"
-	"redirect-service-go/internal/service"
+	"github.com/kaziiriad/url-shortener-scalable/services_go/redirect-service-go/internal/config"
+	"github.com/kaziiriad/url-shortener-scalable/services_go/redirect-service-go/internal/handler"
+	"github.com/kaziiriad/url-shortener-scalable/services_go/redirect-service-go/internal/repository"
+	"github.com/kaziiriad/url-shortener-scalable/services_go/redirect-service-go/internal/service"
 	"syscall"
 	"time"
 
@@ -22,7 +22,7 @@ func main() {
 	cfg, err := config.LoadConfig()
 
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Fatalf("Failed to load config: %w", err)
 	}
 
 	log.Println("===========================================")
@@ -38,13 +38,16 @@ func main() {
 		cfg.RedisMaxConnection,
 	)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	mongoRepo, err := repository.NewMongoRepository(
-		context.Background(),
+		ctx,
 		cfg.MongoURI,
 		cfg.MongoDBName,
 	)
 	if err != nil {
-		log.Fatalf("Failed to connect to MongoDB: %v", err)
+		log.Fatalf("Failed to connect to MongoDB: %w", err)
 	}
 	defer mongoRepo.Close(context.Background())
 
@@ -71,7 +74,7 @@ func main() {
 	go func() {
 		log.Printf("✅ Server listening on port %d", cfg.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
+			log.Fatalf("Failed to start server: %w", err)
 		}
 	}()
 
@@ -81,7 +84,7 @@ func main() {
 	<-quit
 
 	log.Println("🛑 Shutting down server...")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 
 	defer cancel()
 

@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"redirect-service-go/internal/service"
+	"github.com/kaziiriad/url-shortener-scalable/services_go/redirect-service-go/internal/service"
 
 	"github.com/go-chi/chi/v5"
 )

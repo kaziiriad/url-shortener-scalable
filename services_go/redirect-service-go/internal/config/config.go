@@ -1,10 +1,10 @@
 package config
 
 import (
-	"os"
-	"strconv"
+	"errors"
+	"fmt"
 
-	"github.com/joho/godotenv"
+	"github.com/kaziiriad/url-shortener-scalable/services_go/common/env"
 )
 
 type Config struct {
@@ -23,43 +23,52 @@ type Config struct {
 func LoadConfig() (*Config, error) {
 	// Try to load .env file, but don't fail if it doesn't exist
 	// In Docker, environment variables are passed directly
-	_ = godotenv.Load()
+	env.LoadEnv()
 
 	return &Config{
-		Port:               getInt("PORT", 8001),
-		ServiceName:        getString("SERVICE_NAME", "redirect_service"),
-		Environment:        getString("ENVIRONMENT", "development"),
-		MongoURI:           getString("MONGO_URI", "mongodb://localhost:27017"),
-		MongoDBName:        getString("MONGO_DB_NAME", "url_shortener"),
-		RedisHost:          getString("REDIS_HOST", "localhost"),
-		RedisPort:          getInt("REDIS_PORT", 6379),
-		RedisMaxConnection: getInt("REDIS_MAX_CONNECTIONS", 10),
-		OTLPEndpoint:       getString("OTLP_ENDPOINT", "http://otel-collector:4317"),
-		TracingEnabled:     getBool("TRACING_ENABLED", true),
+		Port:               env.GetInt("PORT", 8001),
+		ServiceName:        env.GetString("SERVICE_NAME", "redirect_service"),
+		Environment:        env.GetString("ENVIRONMENT", "development"),
+		MongoURI:           env.GetString("MONGO_URI", "mongodb://localhost:27017"),
+		MongoDBName:        env.GetString("MONGO_DB_NAME", "url_shortener"),
+		RedisHost:          env.GetString("REDIS_HOST", "localhost"),
+		RedisPort:          env.GetInt("REDIS_PORT", 6379),
+		RedisMaxConnection: env.GetInt("REDIS_MAX_CONNECTIONS", 10),
+		OTLPEndpoint:       env.GetString("OTLP_ENDPOINT", "http://otel-collector:4317"),
+		TracingEnabled:     env.GetBool("TRACING_ENABLED", true),
 	}, nil
 }
 
-func getInt(key string, defaultVal int) int {
-	if val := os.Getenv(key); val != "" {
-		if parsed, err := strconv.Atoi(val); err == nil {
-			return parsed
-		}
-	}
-	return defaultVal
-}
+func (c *Config) Validate() error {
 
-func getBool(key string, defaultVal bool) bool {
-	if val := os.Getenv(key); val != "" {
-		if parsed, err := strconv.ParseBool(val); err == nil {
-			return parsed
-		}
+	var errs []error
+	if c.Port < 1 || c.Port > 65535 {
+		errs = append(errs, fmt.Errorf("invalid port: %d", c.Port))
 	}
-	return defaultVal
-}
+	if c.ServiceName == "" {
+		errs = append(errs, fmt.Errorf("service name cannot be empty"))
+	}
+	if c.Environment == "" {
+		errs = append(errs, fmt.Errorf("environment cannot be empty"))
+	}
+	if c.MongoURI == "" {
+		errs = append(errs, fmt.Errorf("mongo URI cannot be empty"))
+	}
+	if c.MongoDBName == "" {
+		errs = append(errs, fmt.Errorf("mongo DB name cannot be empty"))
+	}
+	if c.RedisHost == "" {
+		errs = append(errs, fmt.Errorf("redis host cannot be empty"))
+	}
+	if c.RedisPort < 1 || c.RedisPort > 65535 {
+		errs = append(errs, fmt.Errorf("invalid redis port: %d", c.RedisPort))
+	}
+	if c.RedisMaxConnection < 1 {
+		errs = append(errs, fmt.Errorf("redis max connections must be at least 1"))
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("config validation errors: %v", errors.Join(errs...))
+	}
 
-func getString(key string, defaultVal string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	return defaultVal
+	return nil
 }

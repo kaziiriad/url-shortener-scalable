@@ -15,9 +15,10 @@ A high-performance, scalable URL shortener service built with FastAPI, featuring
 - **Efficient Key Pre-population**: A highly efficient key pre-population mechanism that uses a raw SQL query with `unnest` to bulk-insert keys.
 - **Dual Database**: PostgreSQL for pre-populating and managing a pool of short URL keys, and MongoDB for storing the mapping between short and long URLs (MongoDB v6.0).
 - **Robust Background Processing**: Celery workers with optimized database connections and heartbeat monitoring to ensure reliable task execution.
+- **Go Worker Service**: Alternative background processing using Asynq task queue with built-in scheduler and connection pooling for high-performance task execution.
 - **Automated Database Initialization**: The PostgreSQL database is automatically initialized with the required schema on startup.
 - **Observability Stack**: Full observability with Tempo for distributed tracing, Loki for log aggregation, Grafana for visualization, and OpenTelemetry instrumentation across all services.
-- **Monitoring**: Celery Flower dashboard for task monitoring, accessible via Nginx proxy with proper static asset and API routing.
+- **Monitoring**: Celery Flower dashboard for task monitoring (Python worker) and built-in Asynq metrics (Go worker), accessible via Nginx proxy with proper static asset and API routing.
 - **Automated Testing**: Comprehensive `pytest` framework with mocking for robust unit and integration tests.
 - **Go Test Suite**: Native Go tests and benchmarks following language conventions for the redirect service.
 - **Containerized**: Full Docker setup with docker-compose.
@@ -50,6 +51,9 @@ graph TD
             F[Celery Beat<br/>Task Scheduler]
             E[Celery Worker<br/>Task Processor]
             G[Celery Flower<br/>Monitoring<br/>Port 5555]
+        end
+        subgraph "Go Background Services (Alternative)"
+            H[Go Worker<br/>Asynq<br/>Task Processor + Scheduler]
         end
     end
 
@@ -90,16 +94,21 @@ graph TD
     E -->|DB Connection| P
     E -->|URL Operations| D
     G -->|Monitor| E
+    H -->|Message Queue| B
+    H -->|DB Connection| P
+    H -->|URL Operations| D
 
     %% Observability Flow
     CS -->|OTLP Traces| O
     RS -->|OTLP Traces| O
     E -->|OTLP Traces| O
+    H -->|OTLP Traces| O
     O -->|Traces| T
     R -->|Container Logs| L
     R -.->|Scrape Logs| CS
     R -.->|Scrape Logs| RS
     R -.->|Scrape Logs| E
+    R -.->|Scrape Logs| H
     Z -->|Query| T
     Z -->|Query| L
 
@@ -107,6 +116,7 @@ graph TD
     class H loadTier
     class CS,RS appTier
     class F,E,G processTier
+    class H goWorkerTier
     class B,C,D,P dataTier
     class L,T,O,R,Z observabilityTier
 ```
@@ -286,9 +296,14 @@ The Nginx configuration file `nginx/nginx-decoupled.conf` contains the detailed 
     cd url_shortener_scalable
     ```
 
-2.  **Start all services**
+2.  **Start all services (Python Celery stack)**
     ```bash
     docker-compose -f docker/compose/docker-compose-decoupled.yml up -d
+    ```
+
+   **OR use Go worker service instead:**
+    ```bash
+    docker-compose -f docker/compose/docker-compose-decoupled.yml --profile go up -d
     ```
 
 3.  **Start monitoring stack (optional)**
@@ -337,8 +352,12 @@ The Nginx configuration file `nginx/nginx-decoupled.conf` contains the detailed 
     cd redirect-service-go
     go run cmd/server/main.go
 
-    # In terminal 3
+    # In terminal 3 (Python Celery worker)
     uv run celery -A worker_service.celery_app:celery_app worker --loglevel=info
+
+    # OR terminal 3 (Go Asynq worker - alternative)
+    cd worker-service
+    go run cmd/worker/main.go
     ```
 
 ### Go Redirect Service
@@ -380,6 +399,57 @@ go run cmd/server/main.go
 - Circuit breaker pattern for MongoDB failure protection
 - Cache-aside pattern with 30-minute TTL
 - Context-aware request handling
+
+### Go Worker Service (Asynq)
+
+The project includes a Go-based background worker using Asynq task queue as an alternative to Python Celery:
+
+**Technology Stack:**
+- **Asynq**: Simple, reliable, and efficient distributed task queue for Go
+- **Redis**: Message broker for task queue
+- **lib/pq**: PostgreSQL driver with connection pooling
+- **Standard cron syntax**: `*/5 * * * *` for periodic tasks
+
+**Architecture:**
+```
+worker-service/
+├── cmd/
+│   ├── worker/main.go       # Worker entry point with graceful shutdown
+│   └── client/main.go       # Manual task enqueue tool
+├── internal/
+│   ├── config/              # Environment-based configuration
+│   ├── db/                  # PostgreSQL repository (key generation)
+│   ├── tasks/               # Asynq task handlers
+│   └── worker/              # Asynq worker & scheduler management
+```
+
+**Running the Go worker:**
+```bash
+cd worker-service
+go run cmd/worker/main.go
+```
+
+**Environment Configuration:**
+| Variable | Description | Default Value |
+|---|---|---|
+| `POSTGRES_HOST` | PostgreSQL host (via PgBouncer) | `pgbouncer` |
+| `POSTGRES_PORT` | PostgreSQL port | `6432` |
+| `WORKER_CONCURRENCY` | Concurrent task workers | `10` |
+| `WORKER_QUEUE` | Task queue name | `db_tasks` |
+| `KEY_POPULATION_COUNT` | Keys per batch | `10000` |
+| `KEY_POPULATION_SCHEDULE` | Schedule interval (seconds) | `300` |
+
+**Performance:**
+- 10,000 keys: ~1 second with proper random generation
+- Scheduler: Built-in periodic task enqueuing
+- Connection: Via PgBouncer for efficient pooling
+
+**Features:**
+- Built-in task scheduler with standard cron syntax
+- Hybrid key pre-population strategy
+- Proper random number generation with time-based seeding
+- Graceful shutdown with timeout handling
+- Structured logging for observability
 
 ## 🔧 Configuration
 
@@ -468,9 +538,10 @@ curl "http://localhost/health"
 | **create_service** | 8000 | FastAPI service for creating URLs |
 | **redirect_service** | 8001 | FastAPI service for redirecting URLs |
 | **redirect-service-go** | 8001 | (Alternative) Go implementation using Chi router |
-| **celery_worker** | - | Background task processor |
-| **celery_beat** | - | Periodic task scheduler |
-| **celery_flower** | 5555 | Task monitoring dashboard |
+| **worker-service-go** | - | Go background worker with Asynq (alternative to Celery) |
+| **celery_worker** | - | Python background task processor |
+| **celery_beat** | - | Python periodic task scheduler |
+| **celery_flower** | 5555 | Python task monitoring dashboard |
 
 ### Data Services
 
@@ -493,10 +564,23 @@ curl "http://localhost/health"
 
 ## 🔄 Background Tasks
 
-The system uses Celery for background processing:
+The system supports both Python Celery and Go Asynq for background processing:
+
+### Python Celery Worker
 
 - **Key Pre-population**: Automatically generates unused short URL keys in PostgreSQL using optimized raw SQL strategies.
 - **Cleanup Tasks**: Removes expired URLs and maintains database health.
+
+### Go Asynq Worker
+
+- **Task Queue**: Asynq library for reliable task processing with Redis broker
+- **Built-in Scheduler**: Periodic task registration using standard cron syntax (`*/5 * * * *`)
+- **Connection Pooling**: Direct PostgreSQL connections via PgBouncer for efficient database operations
+- **Hybrid Key Strategy**: Auto-selects optimal insertion method based on batch size
+  - Small batches (<1K): Go-generated keys with single INSERT
+  - Medium batches (1K-50K): Single INSERT with bulk VALUES
+  - Large batches (>50K): PostgreSQL native `generate_series()`
+- **Performance**: Processes 10,000 keys in ~1 second with proper random generation
 
 ### Query Optimization Strategies
 
@@ -531,14 +615,26 @@ url_shortener_scalable/
 │   ├── redirect_service/  # Redirect service (FastAPI)
 │   └── worker_service/    # Celery background workers
 ├── services_go/           # Go microservices
-│   └── redirect-service-go/  # High-performance redirect service
-│       ├── cmd/server/    # Application entry point
-│       ├── internal/      # Private application code
+│   ├── common/            # Shared Go utilities (env helpers)
+│   ├── redirect-service-go/  # High-performance redirect service
+│   │   ├── cmd/server/    # Application entry point
+│   │   ├── internal/      # Private application code
+│   │   │   ├── config/    # Environment configuration
+│   │   │   ├── handler/   # HTTP handlers (Chi router)
+│   │   │   ├── service/   # Business logic layer
+│   │   │   ├── repository/ # Data access (MongoDB, Redis)
+│   │   │   └── utils/     # Circuit breaker implementation
+│   │   ├── go.mod
+│   │   └── Dockerfile
+│   └── worker-service/    # Go background worker (Asynq)
+│       ├── cmd/
+│       │   ├── worker/    # Worker entry point
+│       │   └── client/    # Manual task enqueue tool
+│       ├── internal/
 │       │   ├── config/    # Environment configuration
-│       │   ├── handler/   # HTTP handlers (Chi router)
-│       │   ├── service/   # Business logic layer
-│       │   ├── repository/ # Data access (MongoDB, Redis)
-│       │   └── utils/     # Circuit breaker implementation
+│       │   ├── db/        # PostgreSQL repository (key generation)
+│       │   ├── tasks/     # Task handlers (key pre-population)
+│       │   └── worker/    # Asynq worker & scheduler
 │       ├── go.mod
 │       └── Dockerfile
 ├── docker/                # Docker configurations
