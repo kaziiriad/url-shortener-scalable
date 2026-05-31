@@ -1,5 +1,7 @@
 # URL Shortener - Scalable Microservice
 
+![Architecture](thumbnail.png)
+
 A high-performance, scalable URL shortener service built with FastAPI, featuring Redis caching, PostgreSQL for key management, and MongoDB for URL storage.
 
 ## 🚀 Features
