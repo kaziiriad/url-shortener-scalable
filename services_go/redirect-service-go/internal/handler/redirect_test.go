@@ -4,7 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"redirect-service-go/internal/service"
+
+	"github.com/kaziiriad/url-shortener-scalable/services_go/redirect-service-go/internal/service"
 )
 
 // ============================================

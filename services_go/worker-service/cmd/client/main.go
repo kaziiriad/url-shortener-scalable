@@ -27,7 +27,7 @@ func main() {
 
 	info, err := client.Enqueue(task)
 	if err != nil {
-		log.Fatalf("Failed to enqueue task: %v", err)
+		log.Fatalf("Failed to enqueue task: %w", err)
 	}
 
 	log.Printf("✅ Task enqueued successfully!")

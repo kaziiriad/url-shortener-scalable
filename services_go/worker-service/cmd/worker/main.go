@@ -76,6 +76,6 @@ func main() {
 
 	// Start the worker (blocking call)
 	if err := w.Start(); err != nil {
-		log.Fatalf("❌ Worker failed: %v", err)
+		log.Fatalf("❌ Worker failed: %w", err)
 	}
 }
