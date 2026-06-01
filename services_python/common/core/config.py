@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     redis_host: str = os.getenv("REDIS_HOST", "localhost")
     redis_port: int = int(os.getenv("REDIS_PORT", "6379"))
     redis_password: str = os.getenv("REDIS_PASSWORD", "")
+    redis_db: int = int(os.getenv("REDIS_DB", "0"))
+    redis_rate_limit_db: int = int(os.getenv("REDIS_RATE_LIMIT_DB", "2"))  # Separate DB for rate limits
     redis_max_connections: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "10")) # Connection pool size for Redis
     redis_socket_keepalive: bool = bool(os.getenv("REDIS_SOCKET_KEEPALIVE", "True").lower() in ("true", "1", "yes"))
     redis_socket_timeout: int = int(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
