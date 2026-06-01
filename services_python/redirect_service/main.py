@@ -5,6 +5,7 @@ import uvicorn
 from opentelemetry import trace
 from services_python.common.core.tracing import setup_tracing
 from services_python.common.utils.logger import initialize_logger
+from services_python.common.middleware.rate_limit_middleware import RateLimitMiddleware
 
 # Initialize structured logger with OpenTelemetry integration
 logger = initialize_logger()
@@ -24,6 +25,13 @@ app = FastAPI(
     description="A service to handle URL shortener redirects.",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# Rate limiting middleware (applied before routes)
+app.add_middleware(
+    RateLimitMiddleware,
+    path_prefix="/",
+    rate_limit_key="redirect"
 )
 
 # Will be created later

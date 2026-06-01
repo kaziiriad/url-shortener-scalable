@@ -38,8 +38,8 @@ services:
   # ============================================
   create_service:
     build:
-      context: ../../services_python/create_service
-      dockerfile: ./create_service/Dockerfile
+      context: ../../services_python
+      dockerfile: create_service/Dockerfile
     expose:
       - "8000"
     ports:
@@ -105,8 +105,8 @@ services:
 
   redirect_service:
     build:
-      context: ../../services_python/redirect_service
-      dockerfile: ./redirect_service/Dockerfile
+      context: ../../services_python
+      dockerfile: redirect_service/Dockerfile
     ports:
       - "8001:8001"
     expose:
@@ -356,8 +356,8 @@ services:
   # ============================================
   celery_worker:
     build:
-      context: ../../services_python/worker_service
-      dockerfile: ./Dockerfile
+      context: ../../services_python
+      dockerfile: worker_service/Dockerfile
     container_name: url_shortener_celery_worker
     command: >
       uv run celery -A worker_service.celery_app:celery_app worker
@@ -423,8 +423,8 @@ services:
   # ============================================
   celery_beat:
     build:
-      context: ../../services_python/worker_service
-      dockerfile: ./Dockerfile
+      context: ../../services_python
+      dockerfile: worker_service/Dockerfile
     container_name: url_shortener_celery_beat
     command: >
       uv run celery -A worker_service.celery_app:celery_app beat
@@ -479,8 +479,8 @@ services:
   # ============================================
   celery_flower:
     build:
-      context: ../../services_python/worker_service
-      dockerfile: ./Dockerfile
+      context: ../../services_python
+      dockerfile: worker_service/Dockerfile
     container_name: url_shortener_celery_flower
     ports:
       - "5555:5555"

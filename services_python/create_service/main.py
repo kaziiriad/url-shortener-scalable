@@ -6,6 +6,7 @@ from create_service.routes.monitoring import monitoring_router
 from services_python.common.db.sql.init_db import init_database
 from services_python.common.utils.logger import initialize_logger
 from services_python.common.core.tracing import setup_tracing
+from services_python.common.middleware.rate_limit_middleware import RateLimitMiddleware
 import uvicorn
 
 # Configure logging
@@ -35,6 +36,13 @@ app = FastAPI(
     description="A scalable URL shortener service",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# Rate limiting middleware (applied before routes)
+app.add_middleware(
+    RateLimitMiddleware,
+    path_prefix="/api/v1/create",
+    rate_limit_key="create_url"
 )
 
 # Include API routes with prefix

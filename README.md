@@ -279,7 +279,33 @@ This will start the Nginx load balancer, the `create_service`, `redirect_service
 
 ### Rate Limiting
 
-The Nginx configuration file `nginx/nginx-decoupled.conf` contains the detailed configuration for the load balancer and rate limiter.
+Dual-layer rate limiting protects services from abuse:
+
+**Layer 1 - Nginx (coarse):**
+- `create_api` zone: 30 requests/minute per IP
+- `redirect` zone: 30 requests/minute per IP
+- Burst allowance of 5 requests for traffic spikes
+
+**Layer 2 - Application (precise):**
+- Redis sliding window with Lua script atomic operations
+- 10 requests/minute per client (IP + User-Agent hash)
+- Authenticated users: IP + session token
+- Dedicated Redis DB (DB 2) for rate limit keys
+- Returns 429 with `Retry-After`, `X-RateLimit-*` headers
+
+**Client Identification:**
+1. Authenticated: `auth:{ip}:{session_token}`
+2. Header `X-RateLimit-Id`: `header:{value}`
+3. Cookie `rl_id`: `cookie:{value}`
+4. Anonymous: `ipua:{ip}:{md5(ua)[:12]}`
+
+**Configuration:**
+```bash
+RATE_LIMIT_ENABLED=true
+CREATE_URL_RATE_LIMIT=10/minute
+REDIRECT_RATE_LIMIT=10/minute
+REDIS_RATE_LIMIT_DB=2
+```
 
 ## 📋 Prerequisites
 
