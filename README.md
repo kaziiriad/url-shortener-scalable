@@ -2,7 +2,7 @@
 
 ![Architecture](thumbnail.png)
 
-A high-performance, scalable URL shortener service built with FastAPI, featuring Redis caching, PostgreSQL for key management, and MongoDB for URL storage.
+A high-performance, scalable URL shortener service built with FastAPI, featuring Redis caching, PostgreSQL for key management, and MongoDB for URL storage. Includes an alternative Go implementation of the redirect service for higher throughput.
 
 ## 🚀 Features
 
@@ -288,10 +288,17 @@ Dual-layer rate limiting protects services from abuse:
 
 **Layer 2 - Application (precise):**
 - Redis sliding window with Lua script atomic operations
-- 10 requests/minute per client (IP + User-Agent hash)
+- Per-client limit (IP + User-Agent hash) **plus** aggregate global cap
 - Authenticated users: IP + session token
-- Dedicated Redis DB (DB 2) for rate limit keys
 - Returns 429 with `Retry-After`, `X-RateLimit-*` headers
+
+**Default limits** (override via env):
+
+| Endpoint           | Per-IP          | Global           |
+| ------------------ | --------------- | ---------------- |
+| `POST /create`     | 5 / minute      | 30 / minute      |
+| `GET /{shortKey}`  | 60 / minute     | 1000 / minute    |
+| Go redirect-go     | 10 / minute     | 1000 / minute    |
 
 **Client Identification:**
 1. Authenticated: `auth:{ip}:{session_token}`
@@ -954,6 +961,23 @@ curl http://localhost:8000/monitoring/health/detailed
 ```
 
 ## 🚀 Deployment
+
+### Live Deployment (Render Free Tier)
+
+The `deployment/render-cloudflare-setup` branch deploys to Render with managed
+backing services:
+
+| Component  | Host                          | Notes                          |
+| ---------- | ----------------------------- | ------------------------------ |
+| Create API | Render Web Service (Docker)   | `services_python/create_service` |
+| Redirect   | Render Web Service (Docker)   | `services_go/redirect-service-go` (Go, primary) |
+| Frontend   | Cloudflare Pages (planned)    | See `FRONTEND_SPEC.md`         |
+| Postgres   | Supabase (transaction pooler) | Port 6543, prepared-stmt-safe  |
+| Mongo      | MongoDB Atlas free tier       | URL storage                    |
+| Cache      | Upstash Redis                 | `rediss://` TLS, 10-conn cap   |
+| CDN        | Cloudflare (planned)          | Edge cache for redirect service |
+
+Render auto-deploys on push to the `private` remote (`kaziiriad/url-shortener-deployment`).
 
 ### Production Considerations
 
